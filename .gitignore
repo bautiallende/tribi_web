@@ -41,6 +41,11 @@ $RECYCLE.BIN/
 # IDE
 .idea/
 .vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/debug-guide.md
 *.swp
 *.swo
 

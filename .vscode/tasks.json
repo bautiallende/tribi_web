@@ -1,0 +1,236 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Docker: Start Infrastructure",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "infrastructure/docker-compose.yml",
+        "up",
+        "-d"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "docker"
+      }
+    },
+    {
+      "label": "Docker: Stop Infrastructure",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "infrastructure/docker-compose.yml",
+        "down"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "docker"
+      }
+    },
+    {
+      "label": "Backend: Install Dependencies",
+      "type": "shell",
+      "command": "pip",
+      "args": [
+        "install",
+        "-r",
+        "requirements.txt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "setup"
+      }
+    },
+    {
+      "label": "Web: Install Dependencies",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "setup"
+      }
+    },
+    {
+      "label": "Mobile: Install Dependencies",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/mobile"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "setup"
+      }
+    },
+    {
+      "label": "Backend: Run Migrations",
+      "type": "shell",
+      "command": "alembic",
+      "args": [
+        "upgrade",
+        "head"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "backend"
+      }
+    },
+    {
+      "label": "Backend: Run Linter (Ruff)",
+      "type": "shell",
+      "command": "ruff",
+      "args": [
+        "check",
+        "."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/backend"
+      },
+      "problemMatcher": [
+        "$python"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "lint"
+      }
+    },
+    {
+      "label": "Backend: Format Code (Black)",
+      "type": "shell",
+      "command": "black",
+      "args": [
+        "."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "format"
+      }
+    },
+    {
+      "label": "Web: ESLint",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "lint"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/web"
+      },
+      "problemMatcher": [
+        "$eslint-stylish"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "lint"
+      }
+    },
+    {
+      "label": "All: Pre-commit Hooks",
+      "type": "shell",
+      "command": "pre-commit",
+      "args": [
+        "run",
+        "--all-files"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "lint"
+      }
+    },
+    {
+      "label": "All: Start Development (Monorepo)",
+      "type": "shell",
+      "command": "make",
+      "args": [
+        "dev"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Starting.*",
+          "endsPattern": "^.*ready in.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "start"
+      }
+    },
+    {
+      "label": "All: Start Docker Only",
+      "dependsOn": [
+        "Docker: Start Infrastructure"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "group": "start"
+      }
+    }
+  ]
+}
+

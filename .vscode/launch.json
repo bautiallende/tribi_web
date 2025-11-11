@@ -1,0 +1,161 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (FastAPI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "app.main:app",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
+      "cwd": "${workspaceFolder}/apps/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "jinja": true,
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "presentation": {
+        "hidden": false,
+        "group": "1_backend",
+        "order": 1
+      }
+    },
+    {
+      "name": "Backend Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/",
+        "-v",
+        "-s"
+      ],
+      "cwd": "${workspaceFolder}/apps/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "presentation": {
+        "hidden": false,
+        "group": "1_backend",
+        "order": 2
+      }
+    },
+    {
+      "name": "Backend Test Single",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/test_health.py::test_health",
+        "-v",
+        "-s"
+      ],
+      "cwd": "${workspaceFolder}/apps/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "presentation": {
+        "hidden": false,
+        "group": "1_backend",
+        "order": 3
+      }
+    },
+    {
+      "name": "Web (Next.js Dev)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/web/node_modules/.bin/next",
+      "args": [
+        "dev"
+      ],
+      "cwd": "${workspaceFolder}/apps/web",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "presentation": {
+        "hidden": false,
+        "group": "2_web",
+        "order": 1
+      }
+    },
+    {
+      "name": "Web Build",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/web/node_modules/.bin/next",
+      "args": [
+        "build"
+      ],
+      "cwd": "${workspaceFolder}/apps/web",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "presentation": {
+        "hidden": false,
+        "group": "2_web",
+        "order": 2
+      }
+    },
+    {
+      "name": "Attach to Chrome (Web)",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "pathMapping": {
+        "/": "${workspaceFolder}/apps/web/",
+        "/_next": "${workspaceFolder}/apps/web/.next/"
+      },
+      "presentation": {
+        "hidden": false,
+        "group": "2_web",
+        "order": 3
+      }
+    },
+    {
+      "name": "Mobile (Expo)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/mobile/node_modules/.bin/expo",
+      "args": [
+        "start",
+        "--clear"
+      ],
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "presentation": {
+        "hidden": false,
+        "group": "3_mobile",
+        "order": 1
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Backend + Web",
+      "configurations": [
+        "Backend (FastAPI)",
+        "Web (Next.js Dev)"
+      ]
+    },
+    {
+      "name": "Backend + Web + Mobile",
+      "configurations": [
+        "Backend (FastAPI)",
+        "Web (Next.js Dev)",
+        "Mobile (Expo)"
+      ]
+    }
+  ]
+}
+

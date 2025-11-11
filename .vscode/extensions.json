@@ -1,0 +1,20 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.debugpy",
+    "ms-python.black-formatter",
+    "charliermarsh.ruff",
+    "ms-python.vscode-pylance",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.makefile-tools",
+    "GitHub.copilot",
+    "eamodio.gitlens",
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    "figma.figma-vscode-extension",
+    "mhutchie.git-graph",
+    "sonarsource.sonarlint-vscode",
+    "ms-vscode.makefile-tools"
+  ]
+}
