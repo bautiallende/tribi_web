@@ -24,20 +24,26 @@ This repository contains the source code for Tribi, a service for selling eSIMs 
     ```bash
     cp .env.example .env
     ```
-3.  **Start the infrastructure:**
-    This will start the MySQL database and MailHog.
-    ```bash
-    docker-compose up -d
-    ```
-4.  **Run the development servers:**
-    This will start the backend and web applications.
+3.  **Start the infrastructure and development servers:**
+    This will start the MySQL database, MailHog, the backend and web applications.
     ```bash
     make dev
     ```
 
-## How to add new modules
+## Other commands
 
-To add a new application, create a new directory under the `apps` directory. For a new shared package, create a new directory under the `packages` directory.
+*   **Run backend tests:**
+    ```bash
+    cd apps/backend && pytest
+    ```
+*   **Build web app:**
+    ```bash
+    cd apps/web && npm run build
+    ```
+*   **Start mobile app:**
+    ```bash
+    cd apps/mobile && npx expo start
+    ```
 
 ## Monorepo Structure
 
