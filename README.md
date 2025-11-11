@@ -20,10 +20,20 @@ This repository contains the source code for Tribi, a service for selling eSIMs 
     cd tribi
     ```
 2.  **Set up environment variables:**
-    Copy the `.env.example` file to `.env` and fill in the required values.
+    Copy the `.env.example` file to `.env` in the root directory.
     ```bash
     cp .env.example .env
     ```
+    For the web application, copy `.env.local.example` to `.env.local` inside `apps/web`.
+    ```bash
+    cp apps/web/.env.local.example apps/web/.env.local
+    ```
+    For the mobile application, copy `.env.example` to `.env` inside `apps/mobile`.
+    ```bash
+    cp apps/mobile/.env.example apps/mobile/.env
+    ```
+    Fill in the required values in each `.env` file.
+
 3.  **Start the infrastructure and development servers:**
     This will start the MySQL database, MailHog, the backend and web applications.
     ```bash

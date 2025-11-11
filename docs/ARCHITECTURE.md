@@ -49,3 +49,9 @@ The mobile application is an Expo application with the following structure:
 ## Shared UI
 
 The `packages/ui` directory contains shared UI components that can be used in the web application.
+
+## Health Check Flow
+
+1.  **Web/Mobile Application:** Makes a `GET` request to `${BACKEND_URL}/health`.
+2.  **Backend Application:** The FastAPI application receives the request and returns `{"status": "ok"}`.
+3.  **Database:** The backend may optionally check the database connection as part of its health check.
