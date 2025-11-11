@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-wheel-metadata/
+.eggs/
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+*.dll
+*.exe
+*.whl
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+pnpm-lock.yaml
+
+# Expo
+.expo/
+*.jks
+*.p12
+*.keystore
+*.mobileprovision
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+docker-compose.override.yml
+
+# Env
+.env
+.env.*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
