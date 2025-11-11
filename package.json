@@ -2,10 +2,6 @@
   "name": "tribi",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "dev": "make dev",
     "lint": "echo \"add linters per app\" && exit 0",

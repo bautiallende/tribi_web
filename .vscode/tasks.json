@@ -64,12 +64,13 @@
     {
       "label": "Web: Install Dependencies",
       "type": "shell",
-      "command": "npm",
+      "command": "cmd",
       "args": [
-        "install"
+        "/c",
+        "cd apps\\web && npm install"
       ],
       "options": {
-        "cwd": "${workspaceFolder}/apps/web"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
       "presentation": {
@@ -81,18 +82,57 @@
     {
       "label": "Mobile: Install Dependencies",
       "type": "shell",
-      "command": "npm",
+      "command": "cmd",
       "args": [
-        "install"
+        "/c",
+        "cd apps\\mobile && npm install"
       ],
       "options": {
-        "cwd": "${workspaceFolder}/apps/mobile"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "new",
         "group": "setup"
+      }
+    },
+    {
+      "label": "Web: Dev",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "cd apps\\web && npm run dev"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "start"
+      }
+    },
+    {
+      "label": "Mobile: Start",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "cd apps\\mobile && npm run start"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "start"
       }
     },
     {

@@ -15,7 +15,7 @@
     "@tanstack/react-query": "^5.8.4",
     "i18next": "^23.7.6",
     "react-i18next": "^13.5.0",
-    "@tribi/ui": "*",
+    "@tribi/ui": "file:../../packages/ui",
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "class-variance-authority": "^0.7.0",

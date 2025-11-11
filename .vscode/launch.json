@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Backend (FastAPI)",
-      "type": "debugpy",
+      "type": "python",
       "request": "launch",
       "module": "uvicorn",
       "args": [
@@ -27,7 +27,7 @@
     },
     {
       "name": "Backend Tests",
-      "type": "debugpy",
+      "type": "python",
       "request": "launch",
       "module": "pytest",
       "args": [
@@ -47,7 +47,7 @@
     },
     {
       "name": "Backend Test Single",
-      "type": "debugpy",
+      "type": "python",
       "request": "launch",
       "module": "pytest",
       "args": [
@@ -67,10 +67,11 @@
     },
     {
       "name": "Web (Next.js Dev)",
-      "type": "node",
+      "type": "pwa-node",
       "request": "launch",
-      "program": "${workspaceFolder}/apps/web/node_modules/.bin/next",
-      "args": [
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
         "dev"
       ],
       "cwd": "${workspaceFolder}/apps/web",
@@ -84,14 +85,16 @@
         "hidden": false,
         "group": "2_web",
         "order": 1
-      }
+      },
+      "preLaunchTask": "Web: Install Dependencies"
     },
     {
       "name": "Web Build",
-      "type": "node",
+      "type": "pwa-node",
       "request": "launch",
-      "program": "${workspaceFolder}/apps/web/node_modules/.bin/next",
-      "args": [
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
         "build"
       ],
       "cwd": "${workspaceFolder}/apps/web",
@@ -101,7 +104,8 @@
         "hidden": false,
         "group": "2_web",
         "order": 2
-      }
+      },
+      "preLaunchTask": "Web: Install Dependencies"
     },
     {
       "name": "Attach to Chrome (Web)",
@@ -120,12 +124,12 @@
     },
     {
       "name": "Mobile (Expo)",
-      "type": "node",
+      "type": "pwa-node",
       "request": "launch",
-      "program": "${workspaceFolder}/apps/mobile/node_modules/.bin/expo",
-      "args": [
-        "start",
-        "--clear"
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start"
       ],
       "cwd": "${workspaceFolder}/apps/mobile",
       "envFile": "${workspaceFolder}/.env",
@@ -137,7 +141,8 @@
         "hidden": false,
         "group": "3_mobile",
         "order": 1
-      }
+      },
+      "preLaunchTask": "Mobile: Install Dependencies"
     }
   ],
   "compounds": [

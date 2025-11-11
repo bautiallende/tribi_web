@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "main": "./index.tsx",
   "types": "./index.tsx",
+  "files": [
+    "src",
+    "index.tsx"
+  ],
   "license": "MIT",
   "scripts": {
     "lint": "eslint . --max-warnings 0"
