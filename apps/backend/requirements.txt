@@ -3,9 +3,10 @@ uvicorn[standard]
 sqlalchemy
 alembic
 pydantic
+pydantic-settings
 python-dotenv
 pytest
 httpx
 passlib[bcrypt]
 python-jose[cryptography]
-mysqlclient
+pymysql

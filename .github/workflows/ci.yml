@@ -2,43 +2,58 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main, develop]
 
 jobs:
-  build:
+  backend:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11']
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install Python dependencies
+      - name: Install dependencies
+        working-directory: ./apps/backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r apps/backend/requirements.txt
+          pip install -r requirements.txt
 
-      - name: Run Python tests
-        run: |
-          cd apps/backend
-          pytest
+      - name: Run tests
+        working-directory: ./apps/backend
+        run: pytest
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+  web:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['18.x', '20.x']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
 
-      - name: Install Node.js dependencies
-        run: |
-          npm install -g yarn
-          yarn install --cwd apps/web
+      - name: Install dependencies
+        working-directory: ./apps/web
+        run: npm ci
 
-      - name: Build web app
-        run: |
-          cd apps/web
-          npm run build
+      - name: Run build
+        working-directory: ./apps/web
+        run: npm run build
+
+      - name: Run linter
+        working-directory: ./apps/web
+        run: npm run lint || true
