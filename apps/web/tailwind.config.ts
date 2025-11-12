@@ -10,6 +10,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Semantic base colors mapped to CSS variables
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        muted: 'hsl(var(--muted))',
+        'muted-foreground': 'hsl(var(--muted-foreground))',
+        border: 'hsl(var(--border))',
         // Primary brand colors
         primary: {
           50: 'hsl(var(--color-primary-50))',
