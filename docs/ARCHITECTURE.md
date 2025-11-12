@@ -197,6 +197,186 @@ make web          # Web only (with hot reload)
 make mobile       # Mobile with Expo
 ```
 
+## Authentication & Orders Flow
+
+### OTP Login Flow
+
+```
+┌─────────┐                    ┌─────────────┐                 ┌──────────┐
+│  User   │                    │  Frontend   │                 │ Backend  │
+└────┬────┘                    └──────┬──────┘                 └─────┬────┘
+     │                                │                              │
+     │  1. Enter email                │                              │
+     ├──────────────────────>         │                              │
+     │                                │  2. POST /auth/request-code   │
+     │                                ├─────────────────────────────>│
+     │                                │                              │ Generate 6-digit OTP
+     │                                │                              │ Store in AuthCode
+     │                                │                              │ Send email (MailHog/SMTP)
+     │                                │  3. OK (OTP sent)            │
+     │                                │<─────────────────────────────┤
+     │  OTP sent to email             │                              │
+     │<──────────────────────────────┤                              │
+     │                                │                              │
+     │  4. Enter 6-digit code         │                              │
+     ├──────────────────────>         │                              │
+     │                                │  5. POST /auth/verify         │
+     │                                ├─────────────────────────────>│
+     │                                │                              │ Verify code
+     │                                │                              │ Mark AuthCode as used
+     │                                │                              │ Issue JWT (HS256)
+     │                                │  6. {token: JWT, user: {...}}│
+     │                                │<─────────────────────────────┤
+     │  Login successful              │                              │
+     │<──────────────────────────────┤                              │
+     │  Redirect to /account          │                              │
+     │                                │                              │
+```
+
+**Environment Variables:**
+- `JWT_SECRET`: Secret key for HS256 signing
+- `JWT_EXPIRES_MIN`: Token expiry time in minutes (default: 60)
+- `EMAIL_FROM`: Sender email address
+- `SMTP_HOST`: SMTP server (default: localhost)
+- `SMTP_PORT`: SMTP port (default: 1025 for MailHog)
+
+### Orders & Checkout Flow
+
+```
+┌─────────┐                    ┌─────────────┐                 ┌──────────┐
+│  User   │                    │  Frontend   │                 │ Backend  │
+└────┬────┘                    └──────┬──────┘                 └─────┬────┘
+     │                                │                              │
+     │  1. Browse plans               │                              │
+     ├──────────────────────>         │                              │
+     │  GET /api/plans?country=US     │                              │
+     │                                ├─────────────────────────────>│
+     │                                │  Return filtered plans       │
+     │                                │<─────────────────────────────┤
+     │  2. Select plan                │                              │
+     ├──────────────────────>         │                              │
+     │                                │  3. POST /orders             │
+     │                                │  {plan_id: 1, currency: USD} │
+     │                                ├─────────────────────────────>│
+     │                                │  Create Order (status=created)
+     │                                │  Return {id, plan_id, ...}  │
+     │                                │<─────────────────────────────┤
+     │  Redirect to /checkout         │                              │
+     │  ?order_id=123                 │                              │
+     │                                │                              │
+     │  4. Review & Pay               │                              │
+     ├──────────────────────>         │                              │
+     │                                │  5. POST /payments/create    │
+     │                                │  {order_id: 123, provider: MOCK}
+     │                                ├─────────────────────────────>│
+     │                                │  Create Payment (MOCK)      │
+     │                                │  Update Order (status=paid)  │
+     │                                │<─────────────────────────────┤
+     │                                │                              │
+     │                                │  6. POST /esims/activate     │
+     │                                ├─────────────────────────────>│
+     │                                │  Create EsimProfile         │
+     │                                │  Generate UUID4 code        │
+     │                                │<─────────────────────────────┤
+     │  Success page                  │                              │
+     │  Activation Code shown         │                              │
+     │  Display in /account           │                              │
+     │                                │                              │
+```
+
+**MOCK Payment Provider:**
+- Instantly marks payment as `succeeded`
+- No external integration required
+- Perfect for MVP testing
+
+**eSIM Activation:**
+- Generates UUID4 activation code (stub)
+- Status: `pending` (future: `active` after carrier provisioning)
+- Stored in `EsimProfile` linked to Order and User
+
+### Endpoint Summary
+
+**Authentication:**
+- `POST /auth/request-code` - Request OTP email
+- `POST /auth/verify` - Verify OTP → Issue JWT
+- `GET /auth/me` - Get current user profile (requires JWT)
+
+**Orders:**
+- `POST /orders` - Create new order (requires JWT)
+- `GET /orders/mine` - List user's orders (requires JWT)
+
+**Payments:**
+- `POST /payments/create` - Create MOCK payment (requires JWT)
+- `POST /payments/webhook` - Webhook for payment updates (no auth)
+
+**eSIM:**
+- `POST /esims/activate` - Activate eSIM for paid order (requires JWT)
+
+### Database Models
+
+```
+users
+  ├─ id (PK)
+  ├─ email (UNIQUE)
+  ├─ name
+  ├─ created_at
+  └─ last_login
+
+auth_codes
+  ├─ id (PK)
+  ├─ user_id (FK → users.id)
+  ├─ code (6-digit string)
+  ├─ expires_at
+  └─ used (boolean)
+
+orders
+  ├─ id (PK)
+  ├─ user_id (FK → users.id)
+  ├─ plan_id (FK → plans.id)
+  ├─ status (ENUM: created, paid, failed, refunded)
+  ├─ currency
+  ├─ amount_minor_units
+  ├─ provider_ref
+  └─ created_at
+
+payments
+  ├─ id (PK)
+  ├─ order_id (FK → orders.id)
+  ├─ provider (ENUM: STRIPE, MERCADO_PAGO, MOCK)
+  ├─ status (ENUM: requires_action, succeeded, failed)
+  ├─ raw_payload (JSON)
+  └─ created_at
+
+esim_profiles
+  ├─ id (PK)
+  ├─ user_id (FK → users.id)
+  ├─ order_id (FK → orders.id)
+  ├─ country_id (FK → countries.id, nullable)
+  ├─ carrier_id (FK → carriers.id, nullable)
+  ├─ plan_id (FK → plans.id, nullable)
+  ├─ activation_code (UUID4 string)
+  ├─ iccid (nullable)
+  ├─ status (ENUM: pending, active, failed)
+  └─ created_at
+```
+
+### Testing
+
+**Backend Tests (pytest):**
+```bash
+cd apps/backend
+pytest tests/ -v
+
+# 8/8 tests passing:
+# - 5 auth tests (OTP flow, JWT validation)
+# - 3 health/catalog tests (existing)
+```
+
+All tests use:
+- Temporary SQLite database (file-based, not in-memory)
+- Mocked SMTP for email sending
+- Token generation with test fixtures
+
 ### Testing & Quality
 ```bash
 make test         # Run tests (backend + web build)
