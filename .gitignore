@@ -6,6 +6,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 pip-wheel-metadata/
 .eggs/
 *.egg-info/
@@ -23,6 +24,7 @@ npm-debug.log
 yarn-error.log
 package-lock.json
 pnpm-lock.yaml
+.next/
 
 # Expo
 .expo/
@@ -48,6 +50,18 @@ $RECYCLE.BIN/
 !.vscode/debug-guide.md
 *.swp
 *.swo
+
+# Root scripts (deprecated; per-app only)
+scripts/
+
+# Environment
+.env.local
+.env
+
+# Generated tsconfig files
+apps/web/tsconfig.json
+apps/mobile/tsconfig.json
+apps/web/next-env.d.ts
 
 # Docker
 docker-compose.override.yml
