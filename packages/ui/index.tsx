@@ -1,2 +1,6 @@
 export * from './src/Button'
 export * from './src/Card'
+export * from './src/Badge'
+export * from './src/Skeleton'
+export * from './src/Input'
+export * from './src/Select'
