@@ -1,0 +1,147 @@
+{
+  "countries": [
+    {"iso2": "AR", "name": "Argentina"},
+    {"iso2": "BR", "name": "Brazil"},
+    {"iso2": "CL", "name": "Chile"},
+    {"iso2": "CO", "name": "Colombia"},
+    {"iso2": "MX", "name": "Mexico"},
+    {"iso2": "ES", "name": "Spain"},
+    {"iso2": "FR", "name": "France"},
+    {"iso2": "IT", "name": "Italy"},
+    {"iso2": "DE", "name": "Germany"},
+    {"iso2": "PT", "name": "Portugal"},
+    {"iso2": "US", "name": "United States"},
+    {"iso2": "CA", "name": "Canada"},
+    {"iso2": "AU", "name": "Australia"},
+    {"iso2": "JP", "name": "Japan"},
+    {"iso2": "SG", "name": "Singapore"}
+  ],
+  "carriers": [
+    {"name": "Claro"},
+    {"name": "Movistar"},
+    {"name": "Vodafone"},
+    {"name": "Orange"}
+  ],
+  "plans": [
+    {
+      "country_iso2": "AR",
+      "carrier_name": "Claro",
+      "name": "3GB 7 Days",
+      "data_gb": 3,
+      "duration_days": 7,
+      "price_usd": 9.99,
+      "description": "3GB high-speed data for 7 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "AR",
+      "carrier_name": "Movistar",
+      "name": "5GB 14 Days",
+      "data_gb": 5,
+      "duration_days": 14,
+      "price_usd": 14.99,
+      "description": "5GB high-speed data for 14 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "AR",
+      "carrier_name": "Claro",
+      "name": "10GB 30 Days",
+      "data_gb": 10,
+      "duration_days": 30,
+      "price_usd": 24.99,
+      "description": "10GB high-speed data for 30 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "BR",
+      "carrier_name": "Vodafone",
+      "name": "2GB 7 Days",
+      "data_gb": 2,
+      "duration_days": 7,
+      "price_usd": 7.99,
+      "description": "2GB high-speed data for 7 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "BR",
+      "carrier_name": "Claro",
+      "name": "8GB 30 Days",
+      "data_gb": 8,
+      "duration_days": 30,
+      "price_usd": 19.99,
+      "description": "8GB high-speed data for 30 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "CL",
+      "carrier_name": "Movistar",
+      "name": "4GB 15 Days",
+      "data_gb": 4,
+      "duration_days": 15,
+      "price_usd": 11.99,
+      "description": "4GB high-speed data for 15 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "ES",
+      "carrier_name": "Orange",
+      "name": "6GB 30 Days",
+      "data_gb": 6,
+      "duration_days": 30,
+      "price_usd": 17.99,
+      "description": "6GB high-speed data for 30 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "FR",
+      "carrier_name": "Orange",
+      "name": "Unlimited 30 Days",
+      "data_gb": 0,
+      "duration_days": 30,
+      "price_usd": 29.99,
+      "description": "Unlimited data for 30 days",
+      "is_unlimited": true
+    },
+    {
+      "country_iso2": "US",
+      "carrier_name": "Vodafone",
+      "name": "5GB 14 Days",
+      "data_gb": 5,
+      "duration_days": 14,
+      "price_usd": 12.99,
+      "description": "5GB high-speed data for 14 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "US",
+      "carrier_name": "Claro",
+      "name": "10GB 30 Days",
+      "data_gb": 10,
+      "duration_days": 30,
+      "price_usd": 22.99,
+      "description": "10GB high-speed data for 30 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "JP",
+      "carrier_name": "Movistar",
+      "name": "3GB 7 Days",
+      "data_gb": 3,
+      "duration_days": 7,
+      "price_usd": 13.99,
+      "description": "3GB high-speed data for 7 days",
+      "is_unlimited": false
+    },
+    {
+      "country_iso2": "AU",
+      "carrier_name": "Vodafone",
+      "name": "5GB 30 Days",
+      "data_gb": 5,
+      "duration_days": 30,
+      "price_usd": 16.99,
+      "description": "5GB high-speed data for 30 days",
+      "is_unlimited": false
+    }
+  ]
+}
