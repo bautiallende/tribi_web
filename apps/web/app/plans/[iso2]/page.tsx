@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { Button, Card } from '@tribi/ui'
 
 interface Plan {
   id: number
@@ -22,14 +23,19 @@ interface Country {
   name: string
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+
 export default function PlansPage() {
   const params = useParams()
+  const router = useRouter()
   const iso2 = params?.iso2 as string
   
   const [plans, setPlans] = useState<Plan[]>([])
   const [country, setCountry] = useState<Country | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<number | null>(null)
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,7 +44,7 @@ export default function PlansPage() {
         setError(null)
 
         // Fetch country info
-        const countryResponse = await fetch(`http://localhost:8000/api/countries?q=${iso2}`)
+        const countryResponse = await fetch(`${API_BASE}/api/countries?q=${iso2}`)
         if (countryResponse.ok) {
           const countryData = await countryResponse.json()
           if (countryData.length > 0) {
@@ -47,7 +53,7 @@ export default function PlansPage() {
         }
 
         // Fetch plans for this country
-        const plansResponse = await fetch(`http://localhost:8000/api/plans?country=${iso2}`)
+        const plansResponse = await fetch(`${API_BASE}/api/plans?country=${iso2}`)
         if (plansResponse.ok) {
           const plansData = await plansResponse.json()
           setPlans(plansData)
@@ -64,6 +70,49 @@ export default function PlansPage() {
       fetchData()
     }
   }, [iso2])
+
+  const handleSelectPlan = async (plan: Plan) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    
+    if (!token) {
+      // Redirect to auth if not logged in
+      router.push('/auth')
+      return
+    }
+
+    setSelectedPlan(plan.id)
+    setIsCreatingOrder(true)
+
+    try {
+      // Create order
+      const orderResponse = await fetch(`${API_BASE}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          plan_id: plan.id,
+          currency: 'USD',
+        }),
+      })
+
+      if (!orderResponse.ok) {
+        const errorData = await orderResponse.json()
+        throw new Error(errorData.detail || 'Failed to create order')
+      }
+
+      const order = await orderResponse.json()
+      
+      // Redirect to checkout
+      router.push(`/checkout?order_id=${order.id}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create order')
+      setSelectedPlan(null)
+    } finally {
+      setIsCreatingOrder(false)
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -132,8 +181,12 @@ export default function PlansPage() {
                       )}
                     </div>
 
-                    <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg transition-colors">
-                      Select Plan
+                    <button 
+                      onClick={() => handleSelectPlan(plan)}
+                      disabled={isCreatingOrder && selectedPlan === plan.id}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isCreatingOrder && selectedPlan === plan.id ? 'Creating Order...' : 'Select Plan'}
                     </button>
                   </div>
                 ))}

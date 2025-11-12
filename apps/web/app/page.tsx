@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+
 interface Country {
   id: number
   iso2: string
@@ -22,7 +24,7 @@ export default function Home() {
     const fetchCountries = async () => {
       try {
         setIsLoading(true)
-        const response = await fetch('http://localhost:8000/api/countries')
+        const response = await fetch(`${API_BASE}/api/countries`)
         if (response.ok) {
           const data = await response.json()
           setCountries(data)
@@ -75,7 +77,14 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="w-full max-w-md">
-        <h1 className="text-4xl font-bold text-center mb-8">Tribi</h1>
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl font-bold">Tribi</h1>
+          <Link href="/account" className="text-blue-500 hover:underline text-sm">
+            My Account
+          </Link>
+        </div>
+        
         <h2 className="text-2xl font-semibold text-center mb-6 text-gray-700">Find eSIM Plans</h2>
 
         <div ref={searchRef} className="relative">
