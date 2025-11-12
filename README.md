@@ -133,6 +133,51 @@ npx expo start --android
 npx expo start --ios
 ```
 
+## Catalog Feature (eSIM Plans)
+
+The app includes a complete catalog feature for browsing and filtering eSIM plans by country.
+
+### Initial Setup
+
+1. **Apply database migrations:**
+   ```bash
+   cd apps/backend
+   alembic upgrade head
+   ```
+
+2. **Seed initial data (countries, carriers, plans):**
+   ```bash
+   python -c "from app.seed import seed_database; seed_database()"
+   ```
+
+   This populates the database with 15 countries, 4 carriers, and 12 realistic eSIM plans.
+
+   See [SEEDING.md](./docs/SEEDING.md) for detailed seeding instructions.
+
+### Accessing the Catalog
+
+**Web:**
+- Home page: `http://localhost:3000/`
+- Search for countries with autocomplete
+- Click a country to view available plans
+- Plans sorted by price (lowest first)
+
+**Mobile:**
+- Browse countries with search functionality
+- Tap a country to see its plans
+- Display plan details (data, duration, price)
+
+**API:**
+- `GET /api/countries` - List all countries, optional search: `?q=argentina`
+- `GET /api/plans` - List plans with optional filters:
+  - `?country=ar` - Plans for Argentina
+  - `?max_price=15` - Plans at or under $15
+  - `?min_gb=5` - Plans with at least 5GB
+  - `?days=7` - Plans with 7-day duration
+- `GET /api/plans/{id}` - Get full plan details
+
+See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for endpoint specifications and database design.
+
 ## API Endpoints
 
 ### Health Check
