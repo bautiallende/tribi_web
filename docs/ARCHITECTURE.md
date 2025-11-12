@@ -44,6 +44,78 @@ requirements.txt  (Python dependencies)
 - MySQL via Docker Compose
 - Environment variables via `.env`
 
+## Catalog Feature (eSIM Plans)
+
+**Backend Endpoints:**
+
+The catalog module provides read-only API endpoints for browsing eSIM plans:
+
+```
+GET /api/countries
+  - Query parameter: ?q=search (optional)
+  - Returns: List of Country objects with id, iso2, name
+  - Search: Case-insensitive match on country name or ISO2 code
+  - Example: GET /api/countries?q=arg → Returns Argentina
+
+GET /api/plans
+  - Query parameters (all optional):
+    - ?country=ISO2 (filter by country code)
+    - ?min_gb=N (plans with at least N GB)
+    - ?max_gb=N (plans with at most N GB)
+    - ?max_price=P (plans at or below price P)
+    - ?days=N (plans with exactly N days duration)
+  - Returns: List of Plan objects sorted by price ascending
+  - Example: GET /api/plans?country=ar&max_price=15 → Argentinian plans ≤$15
+
+GET /api/plans/{id}
+  - Returns: Full Plan detail with nested country and carrier objects
+  - Status: 404 if plan not found
+  - Response includes: id, name, data_gb, duration_days, price_usd, description, is_unlimited, country, carrier
+```
+
+**Database Models:**
+
+Three linked tables (see `app/models/catalog.py`):
+
+- **Country**: id (PK), iso2 (unique), name, indexed on both
+- **Carrier**: id (PK), name, indexed
+- **Plan**: id (PK), country_id (FK), carrier_id (FK), name, data_gb (Decimal), duration_days (Int), price_usd (Decimal), description (Text), is_unlimited (Bool)
+
+**Seed Data:**
+
+Location: `app/seed/seed_data.json`
+
+Contains:
+- 15 countries (AR, BR, CL, CO, MX, ES, FR, IT, DE, PT, US, CA, AU, JP, SG)
+- 4 carriers (Claro, Movistar, Vodafone, Orange)
+- 12 realistic eSIM plans ($7.99–$29.99, 2–30 days, 2–10 GB or unlimited)
+
+**Seed Execution:**
+
+```bash
+cd apps/backend
+python -m app.seed.seed_database  # Idempotent - safe to run multiple times
+```
+
+Or via Alembic:
+```bash
+alembic upgrade head
+```
+
+Then:
+```python
+from app.seed import seed_database
+seed_database()
+```
+
+**Migration:**
+
+Alembic version `000000000002_add_catalog_models.py` creates all three tables with:
+- Primary/foreign keys
+- Unique constraint on Country.iso2
+- Indices on frequently filtered columns (country.iso2, country.name, plan price)
+- Proper cascade delete for data integrity
+
 ## Web (Next.js)
 
 **Location:** `apps/web/`

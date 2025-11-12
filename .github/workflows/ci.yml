@@ -54,6 +54,10 @@ jobs:
         working-directory: ./apps/web
         run: npm run build
 
+      - name: Run typecheck
+        working-directory: ./apps/web
+        run: npm run typecheck
+
       - name: Run linter
         working-directory: ./apps/web
         run: npm run lint || true
