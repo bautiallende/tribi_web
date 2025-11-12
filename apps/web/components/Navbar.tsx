@@ -3,10 +3,10 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { Button } from '@tribi/ui'
+import LanguageSwitcher from './LanguageSwitcher'
 
 export function Navbar() {
   const [isDarkMode, setIsDarkMode] = useState(false)
-  const [language, setLanguage] = useState('EN')
 
   const toggleDarkMode = () => {
     const html = document.documentElement
@@ -16,11 +16,6 @@ export function Navbar() {
       html.classList.add('dark')
     }
     setIsDarkMode(!isDarkMode)
-  }
-
-  const toggleLanguage = () => {
-    setLanguage(language === 'EN' ? 'ES' : 'EN')
-    // TODO: Integrate with i18n system
   }
 
   return (
@@ -38,26 +33,20 @@ export function Navbar() {
           {/* Center - Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
             <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">
-              {language === 'EN' ? 'Home' : 'Inicio'}
+              Home
             </Link>
             <a href="/#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">
-              {language === 'EN' ? 'How it works' : 'Cómo funciona'}
+              How it works
             </a>
             <a href="/#popular" className="text-sm font-medium hover:text-primary transition-colors">
-              {language === 'EN' ? 'Plans' : 'Planes'}
+              Plans
             </a>
           </div>
 
           {/* Right - Controls */}
           <div className="flex items-center gap-4">
-            {/* Language Toggle */}
-            <button
-              onClick={toggleLanguage}
-              className="px-3 py-2 text-xs font-medium border border-border rounded-md hover:bg-muted transition-colors"
-              aria-label={`Switch language to ${language === 'EN' ? 'Spanish' : 'English'}`}
-            >
-              {language}
-            </button>
+            {/* Language Switcher */}
+            <LanguageSwitcher />
 
             {/* Dark Mode Toggle */}
             <button
@@ -81,12 +70,12 @@ export function Navbar() {
             </button>
 
             {/* My Account CTA */}
-            <Link href="/account" className="hidden sm:inline-flex px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium text-sm transition-colors">
-              {language === 'EN' ? 'My Account' : 'Mi Cuenta'}
+            <Link href="/account" className="hidden sm:inline-flex px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium text-sm transition-colors" aria-label="My Account">
+              My Account
             </Link>
 
             {/* Mobile Account Icon */}
-            <Link href="/account" className="md:hidden p-2 hover:bg-muted rounded-md transition-colors">
+            <Link href="/account" className="md:hidden p-2 hover:bg-muted rounded-md transition-colors" aria-label="Account">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>

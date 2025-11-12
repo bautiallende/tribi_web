@@ -1,0 +1,41 @@
+{
+  "hero": {
+    "title": "Global eSIMs for Travelers",
+    "subtitle": "Stay connected anywhere with instant data plans. No roaming fees, no SIM swaps.",
+    "cta": "Browse Plans"
+  },
+  "features": {
+    "title": "Why Choose Tribi",
+    "instant": {
+      "title": "Instant Activation",
+      "description": "Activate your eSIM in seconds, right from your phone"
+    },
+    "global": {
+      "title": "Global Coverage",
+      "description": "Stay connected in over 150 countries worldwide"
+    },
+    "affordable": {
+      "title": "Affordable Plans",
+      "description": "Pay only for what you need with flexible data options"
+    },
+    "support": {
+      "title": "24/7 Support",
+      "description": "Our team is always here to help you stay connected"
+    }
+  },
+  "howItWorks": {
+    "title": "How It Works",
+    "step1": {
+      "title": "Choose Your Plan",
+      "description": "Select a data plan for your destination"
+    },
+    "step2": {
+      "title": "Install eSIM",
+      "description": "Scan the QR code to install your eSIM"
+    },
+    "step3": {
+      "title": "Stay Connected",
+      "description": "Enjoy seamless connectivity on your trip"
+    }
+  }
+}
