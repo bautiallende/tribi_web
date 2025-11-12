@@ -31,6 +31,7 @@ export default function AuthPage() {
       const response = await fetch(`${API_BASE}/auth/request-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email }),
       });
 
@@ -58,6 +59,7 @@ export default function AuthPage() {
       const response = await fetch(`${API_BASE}/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, code }),
       });
 
@@ -108,7 +110,7 @@ export default function AuthPage() {
           {step === 'email' ? (
             <form onSubmit={handleRequestCode} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Email Address
                 </label>
                 <input
@@ -117,7 +119,7 @@ export default function AuthPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
               <Button
@@ -134,7 +136,7 @@ export default function AuthPage() {
                 OTP code sent to <strong>{email}</strong>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Enter 6-digit Code
                 </label>
                 <input
@@ -144,7 +146,7 @@ export default function AuthPage() {
                   placeholder="000000"
                   maxLength={6}
                   required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-center text-2xl font-mono tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-center text-2xl font-mono tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
               <div className="flex gap-3">

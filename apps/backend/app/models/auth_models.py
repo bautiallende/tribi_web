@@ -58,10 +58,14 @@ class AuthCode(Base):
     __tablename__ = "auth_codes"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Nullable for pre-user codes
+    email = Column(String(255), nullable=False, index=True)  # Store email for rate limiting
     code = Column(String(6), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False)
+    ip_address = Column(String(45), nullable=True)  # IPv6 max length
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    attempts = Column(Integer, default=0)
 
     user = relationship("User", back_populates="auth_codes")
 
@@ -76,6 +80,7 @@ class Order(Base):
     currency = Column(String(8), nullable=False, default="USD")
     amount_minor_units = Column(BigInteger, nullable=False)
     provider_ref = Column(String(255), nullable=True)
+    idempotency_key = Column(String(255), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="orders")
@@ -112,7 +117,10 @@ class Payment(Base):
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
     provider = Column(Enum(PaymentProvider), nullable=False)
     status = Column(Enum(PaymentStatus), nullable=False)
+    intent_id = Column(String(255), nullable=True, unique=True, index=True)  # Provider's payment intent ID
     raw_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    order = relationship("Order", back_populates="payments")
 
     order = relationship("Order", back_populates="payments")

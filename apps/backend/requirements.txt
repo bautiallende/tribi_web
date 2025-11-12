@@ -6,6 +6,8 @@ pydantic
 pydantic-settings
 python-dotenv
 pytest
+pytest-asyncio
+freezegun
 httpx
 passlib[bcrypt]
 python-jose[cryptography]
