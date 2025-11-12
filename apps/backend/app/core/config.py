@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     MYSQL_PASSWORD: str = "tribi"
     MYSQL_DB: str = "tribi"
     BACKEND_PORT: int = 8000
+    # Auth / Email / Payments
+    JWT_SECRET: str = "dev-secret"
+    JWT_EXPIRES_MIN: int = 60
+    EMAIL_FROM: str = "dev@tribi.local"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    PAYMENT_PROVIDER: str = "MOCK"
 
     @property
     def database_url(self) -> str:
