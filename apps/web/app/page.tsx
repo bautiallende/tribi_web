@@ -87,24 +87,37 @@ export default function Home() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <button className="px-8 py-3 md:px-10 md:py-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95">
-                Get Started Now
+              <button className="group px-8 py-3 md:px-10 md:py-4 bg-gradient-to-r from-primary-600 via-primary-600 to-primary-700 hover:from-primary-700 hover:via-primary-600 hover:to-primary-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 relative overflow-hidden">
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  Get Started Now
+                  <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               </button>
               <Link
                 href="#how-it-works"
-                className="px-8 py-3 md:px-10 md:py-4 border-2 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 rounded-lg font-semibold hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                className="group px-8 py-3 md:px-10 md:py-4 border-2 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 rounded-xl font-semibold hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all hover:border-primary-500 dark:hover:border-primary-500 hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
               >
                 Learn More
+                <svg className="w-5 h-5 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </Link>
             </div>
           </div>
 
           {/* Country Picker Card */}
-          <div className="max-w-2xl mx-auto glass p-8 rounded-2xl shadow-xl">
-            <h2 className="text-xl font-semibold mb-4 text-foreground">Where are you traveling?</h2>
+          <div className="max-w-2xl mx-auto glass p-8 rounded-2xl shadow-2xl border border-primary-100/50 dark:border-primary-900/50 hover:shadow-3xl transition-shadow duration-300">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="text-3xl">🌍</div>
+              <h2 className="text-xl font-semibold text-foreground">Where are you traveling?</h2>
+            </div>
             <CountryPicker onSelect={handleCountrySelect} />
-            <p className="text-xs text-muted-foreground mt-4">
-              🎉 Tap above to see available plans and prices
+            <p className="text-sm text-muted-foreground mt-4 flex items-center gap-2">
+              <span>💡</span>
+              <span>Search by country name or code to see available plans</span>
             </p>
           </div>
         </div>
@@ -122,19 +135,24 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {steps.map((step, index) => (
-              <div key={index} className="relative">
+              <div key={index} className="relative group">
+                {/* Connection Line (hidden on mobile) */}
+                {index < steps.length - 1 && (
+                  <div className="hidden md:block absolute top-16 left-full w-full h-0.5 bg-gradient-to-r from-primary-300 to-transparent dark:from-primary-700 -z-10"></div>
+                )}
+
                 {/* Card */}
-                <div className="bg-white dark:bg-slate-800 border border-border rounded-2xl p-8 h-full hover:shadow-lg transition-shadow">
+                <div className="bg-white dark:bg-slate-800 border-2 border-border rounded-2xl p-8 h-full hover:shadow-2xl hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:-translate-y-2 relative">
                   {/* Icon */}
-                  <div className="text-5xl mb-4">{step.icon}</div>
+                  <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">{step.icon}</div>
 
                   {/* Number Badge */}
-                  <div className="absolute top-4 right-4 w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                    <span className="font-bold text-primary-700 dark:text-primary-100">{step.number}</span>
+                  <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <span className="font-bold text-white text-lg">{step.number}</span>
                   </div>
 
                   {/* Content */}
-                  <h3 className="text-xl font-semibold mb-2 text-foreground">{step.title}</h3>
+                  <h3 className="text-xl font-semibold mb-2 text-foreground group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{step.title}</h3>
                   <p className="text-muted-foreground">{step.description}</p>
                 </div>
 
