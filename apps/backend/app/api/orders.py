@@ -12,9 +12,9 @@ from ..models.auth_models import OrderStatus, EsimStatus, PaymentProvider, Payme
 from ..services.payment_providers import get_payment_provider
 from .auth import get_current_user
 
-router = APIRouter(prefix="/orders", tags=["orders"])
-payments_router = APIRouter(prefix="/payments", tags=["payments"])
-esims_router = APIRouter(prefix="/esims", tags=["esims"])
+router = APIRouter(prefix="/api/orders", tags=["orders"])
+payments_router = APIRouter(prefix="/api/payments", tags=["payments"])
+esims_router = APIRouter(prefix="/api/esims", tags=["esims"])
 
 
 class OrderRead(BaseModel):

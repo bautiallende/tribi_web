@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import random
+import smtplib
 from email.message import EmailMessage
 
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status, Header, Request, Response, Cookie
@@ -12,7 +13,7 @@ from ..core.config import settings
 from ..models import User, AuthCode
 from ..schemas.auth import RequestCode, VerifyCode, TokenResponse, UserRead
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 def send_email_smtp(to_email: str, subject: str, body: str):
@@ -24,6 +25,11 @@ def send_email_smtp(to_email: str, subject: str, body: str):
     print(f"📝 BODY: {body}")
     print(f"{'='*50}\n")
     
+    # In development, just print the code - don't try to send actual email
+    if not settings.SMTP_USER:
+        print("📧 Development mode: Email not sent (SMTP not configured)")
+        return
+    
     msg = EmailMessage()
     msg["From"] = settings.EMAIL_FROM
     msg["To"] = to_email
@@ -31,16 +37,15 @@ def send_email_smtp(to_email: str, subject: str, body: str):
     msg.set_content(body)
 
     try:
-        if settings.SMTP_USE_TLS and settings.SMTP_USER:
-            import smtplib
+        if settings.SMTP_USE_TLS:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
                 smtp.starttls()
                 smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                 smtp.send_message(msg)
         else:
-            # Dev mode - MailHog doesn't need auth
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as smtp:
                 smtp.send_message(msg)
+        print("✅ Email sent successfully")
     except Exception as e:
         print(f"⚠️  Failed to send email: {e}")
         # Don't fail the request if email fails in dev

@@ -28,10 +28,12 @@ def list_countries(
     q: str = Query("", description="Search by name or ISO2"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort_by: str = Query("name", description="Sort field: name, iso2"),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
-    """List all countries with search and pagination (admin only)."""
+    """List all countries with search, sorting, and pagination (admin only)."""
     query = db.query(Country)
     
     # Search
@@ -47,9 +49,16 @@ def list_countries(
     # Count total
     total = query.count()
     
+    # Sorting
+    sort_column = getattr(Country, sort_by, Country.name)
+    if sort_order.lower() == "desc":
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column)
+    
     # Paginate
     offset = (page - 1) * page_size
-    items = query.order_by(Country.name).offset(offset).limit(page_size).all()
+    items = query.offset(offset).limit(page_size).all()
     
     return {
         "items": [CountryRead.from_orm(item) for item in items],

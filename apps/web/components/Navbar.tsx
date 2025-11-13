@@ -32,13 +32,13 @@ export function Navbar() {
 
           {/* Center - Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
-            <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">
+            <Link href="/" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
               Home
             </Link>
-            <a href="/#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">
+            <a href="/#how-it-works" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
               How it works
             </a>
-            <a href="/#popular" className="text-sm font-medium hover:text-primary transition-colors">
+            <a href="/#popular" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
               Plans
             </a>
           </div>

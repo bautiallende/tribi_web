@@ -28,7 +28,7 @@ export default function LanguageSwitcher() {
         value={locale}
         onChange={(e) => onSelectChange(e.target.value)}
         disabled={isPending}
-        className="appearance-none bg-transparent border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 pr-10 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="appearance-none bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-600 rounded-lg px-4 py-2 pr-10 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <option value="en">{t('english')}</option>
         <option value="es">{t('spanish')}</option>

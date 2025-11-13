@@ -48,10 +48,10 @@
 
   /* Dark mode */
   --background: 0 0% 100%;
-  --foreground: 0 0% 0%;
-  --muted: 0 0% 94%;
-  --muted-foreground: 0 0% 45%;
-  --border: 0 0% 90%;
+  --foreground: 0 0% 10%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 20%;
+  --border: 0 0% 80%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -83,7 +83,7 @@ html {
 
 body {
   background-color: white;
-  color: rgb(15, 23, 42);
+  color: rgb(30, 30, 30);
   transition: background-color 0.3s, color 0.3s;
   font-family: var(--font-sans);
   line-height: 1.5;

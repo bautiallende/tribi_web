@@ -72,14 +72,20 @@ export const authAPI = {
   },
 
   verify: async (email: string, code: string) => {
-    const response = await apiClient<{ access_token: string; token_type: string }>(
+    const response = await apiClient<{ 
+      token: string; 
+      user: { id: number; email: string; name?: string } 
+    }>(
       '/api/auth/verify',
       {
         method: 'POST',
         body: JSON.stringify({ email, code }),
       }
     );
-    await storeToken(response.access_token);
+    // Store token - ensure it's a string
+    if (response.token && typeof response.token === 'string') {
+      await storeToken(response.token);
+    }
     return response;
   },
 };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ToastProvider } from "@tribi/ui";
 
 export default function AdminLayout({
   children,
@@ -120,23 +121,47 @@ export default function AdminLayout({
 
   // Authorized - render admin interface
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="border-b bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
-            <button
-              onClick={() => router.push("/")}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              Back to Site →
-            </button>
+    <ToastProvider>
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+        <div className="border-b bg-white dark:bg-slate-800 border-gray-200 dark:border-gray-700">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex h-16 items-center justify-between">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Admin Panel
+              </h1>
+              <div className="flex items-center gap-4">
+                <a
+                  href="/admin/countries"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                >
+                  Countries
+                </a>
+                <a
+                  href="/admin/carriers"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                >
+                  Carriers
+                </a>
+                <a
+                  href="/admin/plans"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                >
+                  Plans
+                </a>
+                <button
+                  onClick={() => router.push("/")}
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                >
+                  Back to Site →
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          {children}
+        </div>
       </div>
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {children}
-      </div>
-    </div>
+    </ToastProvider>
   );
 }

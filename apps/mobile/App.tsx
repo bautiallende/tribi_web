@@ -3,7 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getToken } from './src/api/client';
 
 // Import screens
@@ -19,6 +20,8 @@ const Tab = createBottomTabNavigator();
 
 // Tab Navigator for main authenticated app
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tab.Navigator
       screenOptions={{
@@ -33,8 +36,8 @@ function MainTabs() {
           borderTopWidth: 1,
           borderTopColor: '#E2E8F0',
           paddingTop: 8,
-          paddingBottom: 8,
-          height: 60,
+          paddingBottom: Math.max(insets.bottom, 8),
+          height: 60 + Math.max(insets.bottom, 8),
         },
       }}
     >
@@ -93,7 +96,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar style="dark" />
       <NavigationContainer
         linking={{
@@ -139,7 +142,7 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
-    </>
+    </SafeAreaProvider>
   );
 }
 

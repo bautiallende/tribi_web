@@ -112,22 +112,22 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-10 w-full mt-2 bg-white dark:bg-slate-900 border border-border rounded-xl shadow-xl max-h-96 overflow-y-auto animate-slide-up">
+        <div className="absolute z-10 w-full mt-2 bg-white dark:bg-slate-900 border-2 border-gray-300 dark:border-gray-600 rounded-xl shadow-xl max-h-96 overflow-y-auto animate-slide-up">
           {isLoading ? (
-            <div className="px-4 py-8 text-center text-muted-foreground">
+            <div className="px-4 py-8 text-center text-gray-700 dark:text-gray-300">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
               <p className="mt-2">Loading countries...</p>
             </div>
           ) : filteredCountries.length > 0 ? (
             <>
-              <div className="px-4 py-2 text-xs font-semibold text-muted-foreground bg-muted/50 border-b border-border">
+              <div className="px-4 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600">
                 {filteredCountries.length} {filteredCountries.length === 1 ? 'result' : 'results'}
               </div>
               {filteredCountries.map((country, index) => (
                 <button
                   key={country.id}
                   onClick={() => handleSelectCountry(country)}
-                  className="w-full text-left px-4 py-3 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200 border-b border-border last:border-b-0 focus-visible:outline-none focus-visible:bg-primary-100 dark:focus-visible:bg-primary-900/30 group"
+                  className="w-full text-left px-4 py-3 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200 border-b border-gray-200 dark:border-gray-700 last:border-b-0 focus-visible:outline-none focus-visible:bg-primary-100 dark:focus-visible:bg-primary-900/30 group"
                   role="option"
                   aria-selected={false}
                   style={{ animationDelay: `${index * 30}ms` }}
@@ -137,12 +137,12 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
                       {getFlagEmoji(country.iso2)}
                     </span>
                     <div className="flex-1">
-                      <div className="font-semibold text-foreground group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                         {country.name}
                       </div>
-                      <div className="text-xs text-muted-foreground">{country.iso2}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">{country.iso2}</div>
                     </div>
-                    <svg className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -152,8 +152,8 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
           ) : search.length > 0 ? (
             <div className="px-4 py-12 text-center">
               <div className="text-5xl mb-3">🌍</div>
-              <p className="text-foreground font-medium">No countries found</p>
-              <p className="text-sm text-muted-foreground mt-1">Try searching for "{search}"</p>
+              <p className="text-gray-900 dark:text-gray-100 font-medium">No countries found</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Try searching for "{search}"</p>
             </div>
           ) : null}
         </div>
