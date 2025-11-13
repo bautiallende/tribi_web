@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+import csv
+import io
+from decimal import Decimal
 
 from ..db.session import get_db
 from ..models import Country, Carrier, Plan, User
@@ -176,10 +180,12 @@ def list_carriers(
     q: str = Query("", description="Search by name"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort_by: str = Query("name", description="Sort field: name, id"),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
-    """List all carriers with search and pagination (admin only)."""
+    """List all carriers with search, sorting, and pagination (admin only)."""
     query = db.query(Carrier)
     
     # Search
@@ -190,9 +196,16 @@ def list_carriers(
     # Count total
     total = query.count()
     
+    # Sorting
+    sort_column = getattr(Carrier, sort_by, Carrier.name)
+    if sort_order.lower() == "desc":
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column)
+    
     # Paginate
     offset = (page - 1) * page_size
-    items = query.order_by(Carrier.name).offset(offset).limit(page_size).all()
+    items = query.offset(offset).limit(page_size).all()
     
     return {
         "items": [CarrierRead.from_orm(item) for item in items],
@@ -306,10 +319,12 @@ def list_plans(
     carrier_id: int | None = Query(None, description="Filter by carrier ID"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    sort_by: str = Query("name", description="Sort field: name, price_usd, duration_days, data_gb"),
+    sort_order: str = Query("asc", description="Sort order: asc, desc"),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
-    """List all plans with search, filters, and pagination (admin only)."""
+    """List all plans with search, filters, sorting, and pagination (admin only)."""
     query = db.query(Plan)
     
     # Search
@@ -327,9 +342,16 @@ def list_plans(
     # Count total
     total = query.count()
     
+    # Sorting
+    sort_column = getattr(Plan, sort_by, Plan.name)
+    if sort_order.lower() == "desc":
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column)
+    
     # Paginate
     offset = (page - 1) * page_size
-    items = query.order_by(Plan.name).offset(offset).limit(page_size).all()
+    items = query.offset(offset).limit(page_size).all()
     
     return {
         "items": [PlanRead.from_orm(item) for item in items],
@@ -477,3 +499,145 @@ def delete_plan(
     
     db.delete(plan)
     db.commit()
+
+
+# ========================================
+# CSV Import/Export for Plans
+# ========================================
+
+@router.get("/plans/export")
+async def export_plans_csv(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Export all plans to CSV (admin only)."""
+    plans = db.query(Plan).all()
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        'id', 'name', 'country_id', 'carrier_id', 'data_gb', 
+        'is_unlimited', 'duration_days', 'price_usd', 'description'
+    ])
+    
+    # Write data
+    for plan in plans:
+        writer.writerow([
+            plan.id,
+            plan.name,
+            plan.country_id,
+            plan.carrier_id,
+            str(plan.data_gb),
+            plan.is_unlimited,
+            plan.duration_days,
+            str(plan.price_usd),
+            plan.description or ''
+        ])
+    
+    # Return as streaming response
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=plans_export.csv"}
+    )
+
+
+@router.post("/plans/import")
+async def import_plans_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Import plans from CSV (admin only)."""
+    if not file.filename or not file.filename.endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be a CSV"
+        )
+    
+    # Read CSV
+    contents = await file.read()
+    csv_text = contents.decode('utf-8')
+    csv_reader = csv.DictReader(io.StringIO(csv_text))
+    
+    created_count = 0
+    updated_count = 0
+    errors = []
+    
+    for row_num, row in enumerate(csv_reader, start=2):  # start=2 because row 1 is header
+        try:
+            # Validate required fields
+            required = ['name', 'country_id', 'carrier_id', 'data_gb', 'duration_days', 'price_usd']
+            missing = [f for f in required if not row.get(f)]
+            if missing:
+                errors.append(f"Row {row_num}: Missing fields: {', '.join(missing)}")
+                continue
+            
+            # Parse data
+            plan_data = {
+                'name': row['name'].strip(),
+                'country_id': int(row['country_id']),
+                'carrier_id': int(row['carrier_id']),
+                'data_gb': Decimal(row['data_gb']),
+                'is_unlimited': row.get('is_unlimited', 'false').lower() in ('true', '1', 'yes'),
+                'duration_days': int(row['duration_days']),
+                'price_usd': Decimal(row['price_usd']),
+                'description': row.get('description', '').strip() or None
+            }
+            
+            # Validate country exists
+            country = db.query(Country).filter(Country.id == plan_data['country_id']).first()
+            if not country:
+                errors.append(f"Row {row_num}: Country ID {plan_data['country_id']} not found")
+                continue
+            
+            # Validate carrier exists
+            carrier = db.query(Carrier).filter(Carrier.id == plan_data['carrier_id']).first()
+            if not carrier:
+                errors.append(f"Row {row_num}: Carrier ID {plan_data['carrier_id']} not found")
+                continue
+            
+            # Check if plan exists (by id if provided, or create new)
+            plan_id = row.get('id')
+            if plan_id and plan_id.strip():
+                # Update existing
+                plan = db.query(Plan).filter(Plan.id == int(plan_id)).first()
+                if plan:
+                    for key, value in plan_data.items():
+                        setattr(plan, key, value)
+                    updated_count += 1
+                else:
+                    errors.append(f"Row {row_num}: Plan ID {plan_id} not found for update")
+                    continue
+            else:
+                # Create new
+                plan = Plan(**plan_data)
+                db.add(plan)
+                created_count += 1
+        
+        except ValueError as e:
+            errors.append(f"Row {row_num}: Invalid data format - {str(e)}")
+        except Exception as e:
+            errors.append(f"Row {row_num}: {str(e)}")
+    
+    # Commit if no errors
+    if not errors:
+        db.commit()
+        return {
+            "success": True,
+            "created": created_count,
+            "updated": updated_count,
+            "errors": []
+        }
+    else:
+        db.rollback()
+        return {
+            "success": False,
+            "created": 0,
+            "updated": 0,
+            "errors": errors[:10]  # Limit to first 10 errors
+        }

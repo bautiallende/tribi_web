@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { SearchInput, Pagination, Dialog, useToast, Skeleton } from "@tribi/ui";
 
 interface Carrier {
   id: number;
@@ -15,20 +16,23 @@ interface PaginatedResponse {
   total_pages: number;
 }
 
+type SortField = 'name' | 'id';
+type SortOrder = 'asc' | 'desc';
+
 export default function CarriersAdmin() {
+  const { showToast } = useToast();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [showModal, setShowModal] = useState(false);
   const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<Carrier | null>(null);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Carrier | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({ name: "" });
@@ -37,23 +41,25 @@ export default function CarriersAdmin() {
   const pageSize = 20;
 
   // Fetch carriers
-  const fetchCarriers = async () => {
+  const fetchCarriers = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),
+        sort_by: sortField,
+        sort_order: sortOrder,
         ...(search && { q: search }),
       });
 
       const response = await fetch(
         `http://localhost:8000/admin/carriers?${params}`,
-        {
-          credentials: "include",
-        }
+        { credentials: "include" }
       );
 
-      if (!response.ok) throw new Error("Failed to fetch carriers");
+      if (!response.ok) {
+        throw new Error('Failed to fetch carriers');
+      }
 
       const data: PaginatedResponse = await response.json();
       setCarriers(data.items);
@@ -61,76 +67,74 @@ export default function CarriersAdmin() {
       setTotal(data.total);
     } catch (error) {
       showToast("Failed to load carriers", "error");
+      setCarriers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, sortField, sortOrder, showToast]);
 
   useEffect(() => {
     fetchCarriers();
-  }, [page, search]);
+  }, [fetchCarriers]);
 
-  // Toast notification
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  // Sorting
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setPage(1);
   };
 
-  // Validate form
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) return '↕️';
+    return sortOrder === 'asc' ? '↑' : '↓';
+  };
+
+  // Search
+  const handleSearch = useCallback((query: string) => {
+    setSearch(query);
+    setPage(1);
+  }, []);
+
+  // Validate
   const validateForm = () => {
     const errors: { name?: string } = {};
 
     if (!formData.name.trim()) {
       errors.name = "Carrier name is required";
+    } else if (formData.name.length < 2) {
+      errors.name = "Name must be at least 2 characters";
+    } else if (formData.name.length > 100) {
+      errors.name = "Name must be less than 100 characters";
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Open create modal
-  const handleCreate = () => {
-    setEditingCarrier(null);
-    setFormData({ name: "" });
-    setFormErrors({});
-    setShowModal(true);
-  };
-
-  // Open edit modal
-  const handleEdit = (carrier: Carrier) => {
-    setEditingCarrier(carrier);
-    setFormData({ name: carrier.name });
-    setFormErrors({});
-    setShowModal(true);
-  };
-
-  // Submit form
+  // Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!validateForm()) return;
+    
+    setIsSubmitting(true);
 
     try {
       const url = editingCarrier
         ? `http://localhost:8000/admin/carriers/${editingCarrier.id}`
         : "http://localhost:8000/admin/carriers";
-
+      
       const method = editingCarrier ? "PUT" : "POST";
-
-      // Optimistic update
-      if (editingCarrier) {
-        setCarriers((prev) =>
-          prev.map((c) =>
-            c.id === editingCarrier.id ? { ...c, name: formData.name } : c
-          )
-        );
-      }
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(formData),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: formData.name.trim() }),
       });
 
       if (!response.ok) {
@@ -138,39 +142,30 @@ export default function CarriersAdmin() {
         throw new Error(error.detail || "Failed to save carrier");
       }
 
-      const savedCarrier: Carrier = await response.json();
-
-      // Update with real data
-      if (editingCarrier) {
-        setCarriers((prev) =>
-          prev.map((c) => (c.id === savedCarrier.id ? savedCarrier : c))
-        );
-      } else {
-        fetchCarriers();
-      }
-
       showToast(
-        editingCarrier ? "Carrier updated" : "Carrier created",
+        `Carrier ${editingCarrier ? "updated" : "created"} successfully`,
         "success"
       );
+      
       setShowModal(false);
+      fetchCarriers();
+      resetForm();
     } catch (error: any) {
-      showToast(error.message, "error");
-      if (editingCarrier) {
-        fetchCarriers();
-      }
+      showToast(error.message || "Failed to save carrier", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Delete carrier
-  const handleDelete = async (carrier: Carrier) => {
-    try {
-      // Optimistic delete
-      setCarriers((prev) => prev.filter((c) => c.id !== carrier.id));
-      setDeleteConfirm(null);
+  // Delete
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
+    setIsSubmitting(true);
+
+    try {
       const response = await fetch(
-        `http://localhost:8000/admin/carriers/${carrier.id}`,
+        `http://localhost:8000/admin/carriers/${deleteTarget.id}`,
         {
           method: "DELETE",
           credentials: "include",
@@ -182,242 +177,249 @@ export default function CarriersAdmin() {
         throw new Error(error.detail || "Failed to delete carrier");
       }
 
-      showToast("Carrier deleted", "success");
+      showToast("Carrier deleted successfully", "success");
+      setDeleteTarget(null);
       fetchCarriers();
     } catch (error: any) {
-      showToast(error.message, "error");
-      fetchCarriers();
+      showToast(error.message || "Failed to delete carrier", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  // Modal handlers
+  const openCreateModal = () => {
+    resetForm();
+    setEditingCarrier(null);
+    setShowModal(true);
+  };
+
+  const openEditModal = (carrier: Carrier) => {
+    setFormData({ name: carrier.name });
+    setEditingCarrier(carrier);
+    setFormErrors({});
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    resetForm();
+  };
+
+  const resetForm = () => {
+    setFormData({ name: "" });
+    setFormErrors({});
+    setEditingCarrier(null);
+  };
+
   return (
-    <div>
+    <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Carriers</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Carriers
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Manage eSIM network carriers
+          </p>
+        </div>
         <button
-          onClick={handleCreate}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          onClick={openCreateModal}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors"
         >
           + Add Carrier
         </button>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Search by name..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
+      {/* Search and Stats */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <SearchInput
+          placeholder="Search carriers by name..."
+          onSearch={handleSearch}
+          debounceMs={300}
+          className="w-full sm:max-w-md"
         />
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          Total: <span className="font-semibold">{total}</span> carriers
+        </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                Name
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
-            {loading ? (
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-slate-700 border-b-2 border-gray-200 dark:border-gray-600">
               <tr>
-                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
-                  Loading...
-                </td>
+                <th className="px-6 py-4 text-left">
+                  <button
+                    onClick={() => handleSort('id')}
+                    className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-200 hover:text-primary-600 transition-colors"
+                  >
+                    ID {getSortIcon('id')}
+                  </button>
+                </th>
+                <th className="px-6 py-4 text-left">
+                  <button
+                    onClick={() => handleSort('name')}
+                    className="flex items-center gap-2 font-semibold text-gray-700 dark:text-gray-200 hover:text-primary-600 transition-colors"
+                  >
+                    Carrier Name {getSortIcon('name')}
+                  </button>
+                </th>
+                <th className="px-6 py-4 text-right font-semibold text-gray-700 dark:text-gray-200">
+                  Actions
+                </th>
               </tr>
-            ) : carriers.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
-                  No carriers found
-                </td>
-              </tr>
-            ) : (
-              carriers.map((carrier) => (
-                <tr key={carrier.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {carrier.id}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                    {carrier.name}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                    <button
-                      onClick={() => handleEdit(carrier)}
-                      className="mr-3 text-blue-600 hover:text-blue-800"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(carrier)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      Delete
-                    </button>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-4 w-12" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-4 w-48" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <Skeleton className="h-8 w-16" />
+                        <Skeleton className="h-8 w-16" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : carriers.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center">
+                    <div className="text-gray-500 dark:text-gray-400">
+                      <div className="text-4xl mb-2">📡</div>
+                      <p className="text-lg font-medium">No carriers found</p>
+                      <p className="text-sm mt-1">
+                        {search ? 'Try a different search' : 'Add your first carrier to get started'}
+                      </p>
+                    </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                carriers.map((carrier) => (
+                  <tr
+                    key={carrier.id}
+                    className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                  >
+                    <td className="px-6 py-4">
+                      <span className="text-gray-600 dark:text-gray-400 font-mono text-sm">
+                        #{carrier.id}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-gray-900 dark:text-white font-medium">
+                        {carrier.name}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(carrier)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(carrier)}
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Showing {carriers.length} of {total} carriers
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="rounded-lg border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1 text-sm text-gray-700">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="rounded-lg border border-gray-300 px-3 py-1 text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="mt-6">
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={total}
+          itemsPerPage={pageSize}
+        />
+      </div>
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-xl font-bold text-gray-900">
-              {editingCarrier ? "Edit Carrier" : "Add Carrier"}
-            </h3>
-            <form onSubmit={handleSubmit}>
-              <div className="mb-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Carrier Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
-                  placeholder="AT&T"
-                />
-                {formErrors.name && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                >
-                  {editingCarrier ? "Update" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-xl font-bold text-gray-900">
-              Delete Carrier
-            </h3>
-            <p className="mb-6 text-gray-600">
-              Are you sure you want to delete{" "}
-              <span className="font-semibold">{deleteConfirm.name}</span>? This
-              action cannot be undone and will fail if any plans reference this
-              carrier.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-              >
-                Delete
-              </button>
+        <>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={closeModal}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+              <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
+                {editingCarrier ? "Edit Carrier" : "Create Carrier"}
+              </h3>
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Carrier Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                      placeholder="AT&T, Vodafone, Orange..."
+                    />
+                    {formErrors.name && (
+                      <p className="text-red-600 text-sm mt-1">{formErrors.name}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Saving..." : editingCarrier ? "Update" : "Create"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-white px-6 py-4 shadow-lg">
-          <div className="flex items-center gap-3">
-            {toast.type === "success" ? (
-              <svg
-                className="h-5 w-5 text-green-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="h-5 w-5 text-red-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            )}
-            <p className="text-sm font-medium text-gray-900">{toast.message}</p>
-          </div>
-        </div>
-      )}
+      {/* Delete Dialog */}
+      <Dialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Carrier"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone and may affect existing plans.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
     </div>
   );
 }
