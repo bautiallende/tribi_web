@@ -747,10 +747,14 @@ export default function PlansPage() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" onClick={closeForm} variant="secondary">
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
                   Cancel
-                </Button>
-                <Button type="submit">
+                </button>
+                <Button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                   {editingPlan ? 'Update Plan' : 'Create Plan'}
                 </Button>
               </div>
@@ -765,7 +769,7 @@ export default function PlansPage() {
         onClose={() => setDeletingPlan(null)}
         onConfirm={handleDelete}
         title="Delete Plan"
-        message={`Are you sure you want to delete "${deletingPlan?.name}"? This action cannot be undone.`}
+        description={`Are you sure you want to delete "${deletingPlan?.name}"? This action cannot be undone.`}
         confirmText="Delete"
         variant="danger"
         isLoading={isDeleting}
