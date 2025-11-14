@@ -12,3 +12,4 @@ httpx
 passlib[bcrypt]
 python-jose[cryptography]
 pymysql
+python-multipart
