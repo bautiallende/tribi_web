@@ -18,16 +18,20 @@ export default {
       bundleIdentifier: "app.tribi.mobile"
     },
     android: {
-      package: "app.tribi.mobile"
+      package: "app.tribi.mobile",
+      usesCleartextTraffic: true
     },
     extra: {
       apiBase: "http://192.168.1.102:8000"
     },
-    // Deshabilitar completamente el sistema de actualizaciones
+    // Deshabilitar completamente el sistema de actualizaciones para desarrollo
     updates: {
       enabled: false,
-      checkAutomatically: 'ON_ERROR_RECOVERY',
+      checkAutomatically: "OFF",
       fallbackToCacheTimeout: 0
+    },
+    runtimeVersion: {
+      policy: "nativeVersion"
     }
   }
 };

@@ -42,19 +42,32 @@ export const apiClient = async <T = any>(
 
   const url = `${API_BASE}${endpoint}`;
   
+  // Development logging
+  console.log(`📡 API Request: ${rest.method || 'GET'} ${endpoint}`);
+  console.log(`   Full URL: ${url}`);
+  if (rest.body) {
+    console.log(`   Body:`, JSON.parse(rest.body as string));
+  }
+  
   try {
     const response = await fetch(url, {
       ...rest,
       headers: requestHeaders,
     });
 
+    console.log(`📥 API Response: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      console.error(`❌ API Error:`, errorData);
       throw new Error(errorData.detail || `HTTP ${response.status}`);
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log(`✅ API Success:`, data);
+    return data;
   } catch (error) {
+    console.error(`❌ Network Error:`, error);
     if (error instanceof Error) {
       throw error;
     }

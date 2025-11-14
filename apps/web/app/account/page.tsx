@@ -1,7 +1,7 @@
 /**
  * Account page - User profile and orders
- * GET /auth/me to fetch user profile
- * GET /orders/mine to fetch user orders
+ * GET /api/auth/me to fetch user profile
+ * GET /api/orders/mine to fetch user orders
  */
 
 'use client';
@@ -55,17 +55,22 @@ export default function AccountPage() {
 
   const fetchUserProfile = async (token: string) => {
     try {
-      const response = await fetch(`${API_BASE}/auth/me`, {
+      console.log('👤 Fetching user profile...');
+      const response = await fetch(`${API_BASE}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      console.log('📥 Profile response:', response.status);
 
       if (!response.ok) {
         throw new Error('Failed to fetch profile');
       }
 
       const data = await response.json();
+      console.log('✅ User profile loaded:', data);
       setUser(data);
     } catch (err) {
+      console.error('❌ Profile error:', err);
       setError(err instanceof Error ? err.message : 'Error fetching profile');
       router.push('/auth');
     }
@@ -73,22 +78,26 @@ export default function AccountPage() {
 
   const fetchOrders = async (token: string) => {
     try {
-      const response = await fetch(`${API_BASE}/orders/mine`, {
+      console.log('📦 Fetching orders...');
+      const response = await fetch(`${API_BASE}/api/orders/mine`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      console.log('📥 Orders response:', response.status);
 
       if (!response.ok) {
         throw new Error('Failed to fetch orders');
       }
 
       const data = await response.json();
+      console.log('✅ Orders loaded:', data.length, 'orders');
       setOrders(data);
 
       // Fetch eSIM data for each paid order
       data.forEach(async (order: Order) => {
         if (order.status === 'paid') {
           try {
-            const esimResponse = await fetch(`${API_BASE}/esims/activate`, {
+            const esimResponse = await fetch(`${API_BASE}/api/esims/activate`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

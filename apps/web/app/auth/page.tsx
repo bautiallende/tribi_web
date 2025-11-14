@@ -28,21 +28,27 @@ export default function AuthPage() {
     setMessage('');
 
     try {
-      const response = await fetch(`${API_BASE}/auth/request-code`, {
+      console.log('🔑 Requesting OTP for:', email);
+      const response = await fetch(`${API_BASE}/api/auth/request-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ email }),
       });
 
+      console.log('📥 Response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Error response:', errorData);
         throw new Error(errorData.detail || 'Error requesting code');
       }
 
+      console.log('✅ OTP sent successfully');
       setMessage(`OTP sent to ${email}. Check your email!`);
       setStep('otp');
     } catch (err) {
+      console.error('❌ Request error:', err);
       setError(err instanceof Error ? err.message : 'Error requesting OTP');
     } finally {
       setLoading(false);
@@ -56,19 +62,24 @@ export default function AuthPage() {
     setMessage('');
 
     try {
-      const response = await fetch(`${API_BASE}/auth/verify`, {
+      console.log('🔐 Verifying code for:', email);
+      const response = await fetch(`${API_BASE}/api/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ email, code }),
       });
 
+      console.log('📥 Verify response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Verify error:', errorData);
         throw new Error(errorData.detail || 'Invalid code');
       }
 
       const data = await response.json();
+      console.log('✅ Login successful:', data);
       const token = data.token;
 
       // Store JWT in httpOnly cookie via API call (server-side)
@@ -82,6 +93,7 @@ export default function AuthPage() {
         router.push('/account');
       }, 1000);
     } catch (err) {
+      console.error('❌ Verify error:', err);
       setError(err instanceof Error ? err.message : 'Invalid code');
     } finally {
       setLoading(false);

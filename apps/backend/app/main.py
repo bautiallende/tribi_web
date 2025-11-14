@@ -1,7 +1,9 @@
 import os
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import time
 
 from .api import catalog_router
 from .api.auth import router as auth_router
@@ -11,7 +13,32 @@ from .core.config import settings
 
 load_dotenv()
 
+# Configure logging for development
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Tribi Backend", version="0.1.0")
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # Log request
+    logger.info(f"➡️  {request.method} {request.url.path}")
+    if request.query_params:
+        logger.info(f"   Query params: {dict(request.query_params)}")
+    
+    response = await call_next(request)
+    
+    # Log response
+    process_time = time.time() - start_time
+    logger.info(f"⬅️  {request.method} {request.url.path} - Status: {response.status_code} - Time: {process_time:.3f}s")
+    
+    return response
 
 # CORS middleware with credentials support for cookies
 app.add_middleware(

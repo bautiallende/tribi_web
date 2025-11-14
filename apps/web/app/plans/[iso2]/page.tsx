@@ -115,7 +115,8 @@ export default function PlansPage() {
     setIsCreatingOrder(true)
 
     try {
-      const orderResponse = await fetch(`${API_BASE}/orders`, {
+      console.log('🛒 Creating order for plan:', plan.id);
+      const orderResponse = await fetch(`${API_BASE}/api/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -126,6 +127,8 @@ export default function PlansPage() {
           currency: 'USD',
         }),
       })
+
+      console.log('📥 Order response:', orderResponse.status);
 
       if (!orderResponse.ok) {
         const errorData = await orderResponse.json()

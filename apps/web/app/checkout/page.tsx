@@ -79,7 +79,8 @@ export default function CheckoutPage() {
 
     try {
       // Create MOCK payment
-      const paymentResponse = await fetch(`${API_BASE}/payments/create`, {
+      console.log('💳 Creating payment...');
+      const paymentResponse = await fetch(`${API_BASE}/api/payments/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,13 +92,16 @@ export default function CheckoutPage() {
         }),
       });
 
+      console.log('📥 Payment response:', paymentResponse.status);
+
       if (!paymentResponse.ok) {
         const errorData = await paymentResponse.json();
         throw new Error(errorData.detail || 'Payment failed');
       }
 
       // Activate eSIM
-      const esimResponse = await fetch(`${API_BASE}/esims/activate`, {
+      console.log('📱 Activating eSIM...');
+      const esimResponse = await fetch(`${API_BASE}/api/esims/activate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
