@@ -22,16 +22,22 @@ export default {
       usesCleartextTraffic: true
     },
     extra: {
-      apiBase: "http://192.168.1.102:8000"
+      apiBase: "http://192.168.1.102:8000",
+      eas: {
+        projectId: undefined
+      }
     },
     // Deshabilitar completamente el sistema de actualizaciones para desarrollo
     updates: {
       enabled: false,
       checkAutomatically: "OFF",
-      fallbackToCacheTimeout: 0
+      fallbackToCacheTimeout: 0,
+      url: undefined
     },
     runtimeVersion: {
       policy: "nativeVersion"
-    }
+    },
+    // Asegurar que no se intente cargar expo-updates
+    plugins: []
   }
 };

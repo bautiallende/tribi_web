@@ -16,20 +16,27 @@ export default function AdminLayout({
   useEffect(() => {
     async function checkAuth() {
       try {
+        console.log("🔐 Admin layout: Checking authentication...");
+        
         // Check if user is authenticated
-        const response = await fetch("http://localhost:8000/auth/me", {
+        const response = await fetch("http://localhost:8000/api/auth/me", {
           credentials: "include",
         });
 
+        console.log(`📥 Admin auth response: ${response.status}`);
+
         if (!response.ok) {
+          console.log("❌ Not authenticated, redirecting to login");
           // Not authenticated - redirect to login
           router.push("/auth/login?redirect=/admin");
           return;
         }
 
         const user = await response.json();
+        console.log("✅ User authenticated:", user.email);
 
         // Check if user is admin by trying to access admin endpoint
+        console.log("🔍 Checking admin privileges...");
         const adminCheckResponse = await fetch(
           "http://localhost:8000/admin/countries?page=1&page_size=1",
           {
@@ -37,7 +44,10 @@ export default function AdminLayout({
           }
         );
 
+        console.log(`📥 Admin check response: ${adminCheckResponse.status}`);
+
         if (adminCheckResponse.status === 403) {
+          console.log("❌ User is not admin");
           // Authenticated but not admin
           setError("Access denied. Admin privileges required.");
           setIsAuthorized(false);
@@ -45,15 +55,17 @@ export default function AdminLayout({
         }
 
         if (!adminCheckResponse.ok) {
+          console.log("❌ Failed to verify admin access");
           setError("Failed to verify admin access.");
           setIsAuthorized(false);
           return;
         }
 
         // User is admin
+        console.log("✅ Admin access confirmed");
         setIsAuthorized(true);
       } catch (err) {
-        console.error("Admin auth check error:", err);
+        console.error("❌ Admin auth check error:", err);
         setError("Network error. Please try again.");
         setIsAuthorized(false);
       }
