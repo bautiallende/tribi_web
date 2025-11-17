@@ -151,8 +151,14 @@ def verify_code(
     """Verify OTP code and return JWT (also set cookie for web)."""
     email = payload.email
     code = payload.code
+    
+    print(f"\n🔐 Verify code called:")
+    print(f"  Email: {email}")
+    print(f"  Code: {code}")
+    
     user = db.query(User).filter(User.email == email).first()
     if not user:
+        print(f"  ❌ User not found")
         raise HTTPException(status_code=404, detail="User not found")
 
     now = datetime.utcnow()
@@ -168,15 +174,19 @@ def verify_code(
     )
     
     if not auth:
+        print(f"  ❌ Invalid code")
         raise HTTPException(status_code=400, detail="Invalid code")
     
     if auth.expires_at < now:
+        print(f"  ❌ Code expired")
         raise HTTPException(status_code=400, detail="Code expired")
 
     # Mark used
     auth.used = True  # type: ignore
     user.last_login = now  # type: ignore
     db.commit()
+    
+    print(f"  ✅ Code verified")
 
     # Create JWT
     payload_jwt = {
@@ -184,6 +194,15 @@ def verify_code(
         "exp": datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRES_MIN)
     }
     token = jwt.encode(payload_jwt, settings.JWT_SECRET, algorithm="HS256")
+    
+    print(f"  🔑 JWT created: {token[:20]}...")
+    print(f"  🍪 Setting cookie:")
+    print(f"     key: tribi_token")
+    print(f"     httponly: True")
+    print(f"     secure: False")
+    print(f"     samesite: lax")
+    print(f"     max_age: {settings.JWT_EXPIRES_MIN * 60} seconds")
+    print(f"     domain: {settings.COOKIE_DOMAIN}")
     
     # Set httpOnly cookie for web clients
     response.set_cookie(
@@ -195,6 +214,8 @@ def verify_code(
         max_age=settings.JWT_EXPIRES_MIN * 60,
         domain=settings.COOKIE_DOMAIN
     )
+    
+    print(f"  ✅ Cookie set successfully\n")
 
     # Return token and user info
     from ..schemas.auth import UserRead
@@ -225,18 +246,27 @@ def get_current_user(
     """Get current user from Bearer token or cookie."""
     token = None
     
+    # Debug logging
+    print(f"\n🔐 get_current_user called:")
+    print(f"  Cookie (tribi_token): {'✅ Present' if tribi_token else '❌ Missing'}")
+    print(f"  Header (Authorization): {'✅ Present' if authorization else '❌ Missing'}")
+    
     # Try cookie first (web), then header (mobile)
     if tribi_token:
         token = tribi_token
+        print(f"  Using cookie token: {tribi_token[:20]}...")
     elif authorization:
         try:
             scheme, token_value = authorization.split()
             if scheme.lower() == "bearer":
                 token = token_value
-        except Exception:
+                print(f"  Using bearer token: {token[:20]}...")
+        except Exception as e:
+            print(f"  ❌ Failed to parse authorization header: {e}")
             pass
     
     if not token:
+        print(f"  ❌ No token found - returning 401\n")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing credentials"
@@ -245,14 +275,20 @@ def get_current_user(
     try:
         data = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
         email = data.get("sub")
+        print(f"  ✅ Token decoded successfully")
+        print(f"  Email from token: {email}")
         if not email:
             raise JWTError()
-    except JWTError:
+    except JWTError as e:
+        print(f"  ❌ JWT decode error: {e}\n")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
+        print(f"  ❌ User not found in database\n")
         raise HTTPException(status_code=404, detail="User not found")
+    
+    print(f"  ✅ User authenticated: {user.email}\n")
     return user
 
 
