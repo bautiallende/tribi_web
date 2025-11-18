@@ -1,5 +1,6 @@
-from pydantic import BaseModel, ConfigDict
 from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 
 class CountryBase(BaseModel):
@@ -28,6 +29,12 @@ class PlanBase(BaseModel):
     price_usd: Decimal
     description: str | None = None
     is_unlimited: bool = False
+
+    @field_serializer("data_gb", "price_usd")
+    def _serialize_decimal(
+        self, value: Decimal
+    ) -> float:  # pragma: no cover - pydantic hook
+        return float(value)
 
 
 class PlanRead(PlanBase):

@@ -23,13 +23,13 @@ repos:
     rev: v3.1.0
     hooks:
       - id: prettier
-        types_or: [javascript, typescript, jsx, tsx, json, yaml, markdown]
+        types_or: [javascript, ts, jsx, tsx, json, yaml, markdown]
 
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: v8.54.0
     hooks:
       - id: eslint
-        types: [javascript, typescript, jsx, tsx]
+        types: [javascript, ts, jsx, tsx]
         additional_dependencies:
           - eslint
           - eslint-config-next

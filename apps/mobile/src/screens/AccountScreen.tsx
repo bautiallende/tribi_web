@@ -1,37 +1,48 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-  Clipboard,
+    ActivityIndicator,
+    Alert,
+    Clipboard,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { ordersAPI, clearToken } from '../api/client';
+import { clearToken, esimAPI, ordersAPI } from '../api/client';
+
+interface PlanSnapshot {
+  id?: number;
+  name?: string;
+  country_name?: string;
+  country_iso2?: string;
+  carrier_name?: string;
+  data_gb?: number;
+  duration_days?: number;
+  price_minor_units?: number;
+  currency?: string;
+}
 
 interface Order {
   id: number;
-  plan_id: number;
+  plan_id?: number;
   status: string;
-  amount_usd: string;
+  currency: string;
+  amount_minor_units: number;
+  amount_major?: string;
   created_at: string;
-  plan: {
-    name: string;
-    data_gb: string;
-    duration_days: number;
-    country: {
-      name: string;
-      iso2: string;
-    };
-  };
-  esim: {
-    activation_code: string;
-    qr_code_url: string;
-    status: string;
-  } | null;
+  plan_snapshot?: PlanSnapshot | null;
+}
+
+interface EsimProfile {
+  id: number;
+  order_id: number | null;
+  activation_code: string | null;
+  iccid: string | null;
+  status: string;
+  qr_payload?: string | null;
+  instructions?: string | null;
 }
 
 interface AccountScreenProps {
@@ -40,6 +51,7 @@ interface AccountScreenProps {
 
 export default function AccountScreen({ navigation }: AccountScreenProps) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [esims, setEsims] = useState<Record<number, EsimProfile>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -48,9 +60,20 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     try {
       if (!isRefresh) setIsLoading(true);
       setError('');
-      
-      const data = await ordersAPI.getMyOrders();
-      setOrders(data);
+      const [ordersData, esimsData] = await Promise.all([
+        ordersAPI.getMyOrders(),
+        esimAPI.listMine(),
+      ]);
+
+      const mappedEsims = esimsData.reduce<Record<number, EsimProfile>>((acc, esim) => {
+        if (typeof esim.order_id === 'number') {
+          acc[esim.order_id] = esim;
+        }
+        return acc;
+      }, {});
+
+      setOrders(ordersData);
+      setEsims(mappedEsims);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load orders');
     } finally {
@@ -89,16 +112,19 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     );
   };
 
-  const copyActivationCode = (code: string) => {
+  const copyActivationCode = (code?: string | null) => {
+    if (!code) return;
     Clipboard.setString(code);
     Alert.alert('Copied!', 'Activation code copied to clipboard');
   };
 
   const getStatusColor = (status: string): string => {
     switch (status.toLowerCase()) {
-      case 'completed':
+      case 'paid':
       case 'active':
+      case 'ready':
         return '#10B981';
+      case 'created':
       case 'pending':
         return '#F59E0B';
       case 'failed':
@@ -111,9 +137,11 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
 
   const getStatusIcon = (status: string): string => {
     switch (status.toLowerCase()) {
-      case 'completed':
+      case 'paid':
+      case 'ready':
       case 'active':
         return '✅';
+      case 'created':
       case 'pending':
         return '⏳';
       case 'failed':
@@ -122,6 +150,13 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       default:
         return '📱';
     }
+  };
+
+  const formatAmount = (order: Order): string => {
+    if (order.amount_major) {
+      return `${order.amount_major} ${order.currency}`;
+    }
+    return `${(order.amount_minor_units / 100).toFixed(2)} ${order.currency}`;
   };
 
   const formatDate = (dateString: string): string => {
@@ -136,6 +171,8 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
   const renderOrderItem = ({ item }: { item: Order }) => {
     const statusColor = getStatusColor(item.status);
     const statusIcon = getStatusIcon(item.status);
+    const snapshot = item.plan_snapshot;
+    const esim = esims[item.id];
 
     return (
       <View style={styles.orderCard}>
@@ -143,9 +180,9 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
         <View style={styles.orderHeader}>
           <View style={styles.orderHeaderLeft}>
             <Text style={styles.orderCountry}>
-              {item.plan.country.name} {item.plan.country.iso2}
+              {snapshot?.country_name || 'eSIM Plan'} {snapshot?.country_iso2?.toUpperCase()}
             </Text>
-            <Text style={styles.orderPlan}>{item.plan.name}</Text>
+            <Text style={styles.orderPlan}>{snapshot?.name || `Plan #${item.plan_id ?? item.id}`}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
             <Text style={styles.statusIcon}>{statusIcon}</Text>
@@ -159,15 +196,19 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
         <View style={styles.orderDetails}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Data:</Text>
-            <Text style={styles.detailValue}>{item.plan.data_gb} GB</Text>
+            <Text style={styles.detailValue}>
+              {snapshot?.data_gb ? `${snapshot.data_gb} GB` : '—'}
+            </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Duration:</Text>
-            <Text style={styles.detailValue}>{item.plan.duration_days} days</Text>
+            <Text style={styles.detailValue}>
+              {snapshot?.duration_days ? `${snapshot.duration_days} days` : '—'}
+            </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Amount:</Text>
-            <Text style={styles.detailValue}>${item.amount_usd} USD</Text>
+            <Text style={styles.detailValue}>{formatAmount(item)}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Order Date:</Text>
@@ -176,19 +217,30 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
         </View>
 
         {/* eSIM Activation Code */}
-        {item.esim && (
+        {esim && (
           <View style={styles.esimSection}>
             <View style={styles.divider} />
             <Text style={styles.esimTitle}>eSIM Activation</Text>
             <View style={styles.activationCodeRow}>
-              <Text style={styles.activationCode}>{item.esim.activation_code}</Text>
+              <Text style={styles.activationCode}>
+                {esim.activation_code || 'Pending activation'}
+              </Text>
               <TouchableOpacity
                 style={styles.copyButton}
-                onPress={() => copyActivationCode(item.esim!.activation_code)}
+                disabled={!esim.activation_code}
+                onPress={() => copyActivationCode(esim.activation_code)}
               >
-                <Text style={styles.copyButtonText}>Copy</Text>
+                <Text style={[styles.copyButtonText, !esim.activation_code && { opacity: 0.6 }]}>
+                  Copy
+                </Text>
               </TouchableOpacity>
             </View>
+            {esim.iccid && (
+              <Text style={styles.detailValue}>ICCID: {esim.iccid}</Text>
+            )}
+            {esim.instructions && (
+              <Text style={styles.instructionsText}>{esim.instructions}</Text>
+            )}
           </View>
         )}
       </View>
@@ -397,6 +449,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0F172A',
     marginBottom: 8,
+  },
+  instructionsText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#64748B',
   },
   activationCodeRow: {
     flexDirection: 'row',

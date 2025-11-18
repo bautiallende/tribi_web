@@ -1,23 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
 import csv
 import io
 from decimal import Decimal
 
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+
 from ..db.session import get_db
-from ..models import Country, Carrier, Plan, User
-from ..schemas.catalog import CountryRead, CarrierRead, PlanRead
+from ..models import Carrier, Country, Plan, User
 from ..schemas.admin import (
-    CountryCreate,
-    CountryUpdate,
     CarrierCreate,
     CarrierUpdate,
+    CountryCreate,
+    CountryUpdate,
+    PaginatedResponse,
     PlanCreate,
     PlanUpdate,
-    PaginatedResponse,
 )
+from ..schemas.catalog import CarrierRead, CountryRead, PlanRead
 from .auth import get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # ========================================
 # Countries CRUD
 # ========================================
+
 
 @router.get("/countries", response_model=PaginatedResponse)
 def list_countries(
@@ -39,7 +41,7 @@ def list_countries(
 ):
     """List all countries with search, sorting, and pagination (admin only)."""
     query = db.query(Country)
-    
+
     # Search
     if q:
         search_term = f"%{q}%"
@@ -49,23 +51,23 @@ def list_countries(
                 Country.iso2.ilike(search_term),
             )
         )
-    
+
     # Count total
     total = query.count()
-    
+
     # Sorting
     sort_column = getattr(Country, sort_by, Country.name)
     if sort_order.lower() == "desc":
         query = query.order_by(sort_column.desc())
     else:
         query = query.order_by(sort_column)
-    
+
     # Paginate
     offset = (page - 1) * page_size
     items = query.offset(offset).limit(page_size).all()
-    
+
     return {
-        "items": [CountryRead.from_orm(item) for item in items],
+        "items": [CountryRead.model_validate(item) for item in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -73,7 +75,9 @@ def list_countries(
     }
 
 
-@router.post("/countries", response_model=CountryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/countries", response_model=CountryRead, status_code=status.HTTP_201_CREATED
+)
 def create_country(
     payload: CountryCreate,
     db: Session = Depends(get_db),
@@ -85,23 +89,23 @@ def create_country(
     if len(iso2) != 2 or not iso2.isalpha():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="ISO2 must be exactly 2 uppercase letters"
+            detail="ISO2 must be exactly 2 uppercase letters",
         )
-    
+
     # Check for duplicate
     existing = db.query(Country).filter(Country.iso2 == iso2).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Country with ISO2 '{iso2}' already exists"
+            detail=f"Country with ISO2 '{iso2}' already exists",
         )
-    
+
     country = Country(iso2=iso2, name=payload.name)
     db.add(country)
     db.commit()
     db.refresh(country)
-    
-    return CountryRead.from_orm(country)
+
+    return CountryRead.model_validate(country)
 
 
 @router.put("/countries/{country_id}", response_model=CountryRead)
@@ -115,37 +119,38 @@ def update_country(
     country = db.query(Country).filter(Country.id == country_id).first()
     if not country:
         raise HTTPException(status_code=404, detail="Country not found")
-    
+
     # Update ISO2 if provided
     if payload.iso2 is not None:
         iso2 = payload.iso2.upper()
         if len(iso2) != 2 or not iso2.isalpha():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="ISO2 must be exactly 2 uppercase letters"
+                detail="ISO2 must be exactly 2 uppercase letters",
             )
-        
+
         # Check for duplicate (excluding current country)
-        existing = db.query(Country).filter(
-            Country.iso2 == iso2,
-            Country.id != country_id
-        ).first()
+        existing = (
+            db.query(Country)
+            .filter(Country.iso2 == iso2, Country.id != country_id)
+            .first()
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Country with ISO2 '{iso2}' already exists"
+                detail=f"Country with ISO2 '{iso2}' already exists",
             )
-        
+
         country.iso2 = iso2  # type: ignore
-    
+
     # Update name if provided
     if payload.name is not None:
         country.name = payload.name  # type: ignore
-    
+
     db.commit()
     db.refresh(country)
-    
-    return CountryRead.from_orm(country)
+
+    return CountryRead.model_validate(country)
 
 
 @router.delete("/countries/{country_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -158,15 +163,17 @@ def delete_country(
     country = db.query(Country).filter(Country.id == country_id).first()
     if not country:
         raise HTTPException(status_code=404, detail="Country not found")
-    
+
     # Check for dependent plans
-    plans_count = db.query(func.count(Plan.id)).filter(Plan.country_id == country_id).scalar()
+    plans_count = (
+        db.query(func.count(Plan.id)).filter(Plan.country_id == country_id).scalar()
+    )
     if plans_count > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete country: {plans_count} plan(s) reference it"
+            detail=f"Cannot delete country: {plans_count} plan(s) reference it",
         )
-    
+
     db.delete(country)
     db.commit()
 
@@ -174,6 +181,7 @@ def delete_country(
 # ========================================
 # Carriers CRUD
 # ========================================
+
 
 @router.get("/carriers", response_model=PaginatedResponse)
 def list_carriers(
@@ -187,28 +195,28 @@ def list_carriers(
 ):
     """List all carriers with search, sorting, and pagination (admin only)."""
     query = db.query(Carrier)
-    
+
     # Search
     if q:
         search_term = f"%{q}%"
         query = query.filter(Carrier.name.ilike(search_term))
-    
+
     # Count total
     total = query.count()
-    
+
     # Sorting
     sort_column = getattr(Carrier, sort_by, Carrier.name)
     if sort_order.lower() == "desc":
         query = query.order_by(sort_column.desc())
     else:
         query = query.order_by(sort_column)
-    
+
     # Paginate
     offset = (page - 1) * page_size
     items = query.offset(offset).limit(page_size).all()
-    
+
     return {
-        "items": [CarrierRead.from_orm(item) for item in items],
+        "items": [CarrierRead.model_validate(item) for item in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -216,7 +224,9 @@ def list_carriers(
     }
 
 
-@router.post("/carriers", response_model=CarrierRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/carriers", response_model=CarrierRead, status_code=status.HTTP_201_CREATED
+)
 def create_carrier(
     payload: CarrierCreate,
     db: Session = Depends(get_db),
@@ -227,23 +237,23 @@ def create_carrier(
     if not payload.name or not payload.name.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Carrier name cannot be empty"
+            detail="Carrier name cannot be empty",
         )
-    
+
     # Check for duplicate
     existing = db.query(Carrier).filter(Carrier.name == payload.name).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Carrier '{payload.name}' already exists"
+            detail=f"Carrier '{payload.name}' already exists",
         )
-    
+
     carrier = Carrier(name=payload.name)
     db.add(carrier)
     db.commit()
     db.refresh(carrier)
-    
-    return CarrierRead.from_orm(carrier)
+
+    return CarrierRead.model_validate(carrier)
 
 
 @router.put("/carriers/{carrier_id}", response_model=CarrierRead)
@@ -257,32 +267,33 @@ def update_carrier(
     carrier = db.query(Carrier).filter(Carrier.id == carrier_id).first()
     if not carrier:
         raise HTTPException(status_code=404, detail="Carrier not found")
-    
+
     # Update name if provided
     if payload.name is not None:
         if not payload.name.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Carrier name cannot be empty"
+                detail="Carrier name cannot be empty",
             )
-        
+
         # Check for duplicate (excluding current carrier)
-        existing = db.query(Carrier).filter(
-            Carrier.name == payload.name,
-            Carrier.id != carrier_id
-        ).first()
+        existing = (
+            db.query(Carrier)
+            .filter(Carrier.name == payload.name, Carrier.id != carrier_id)
+            .first()
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Carrier '{payload.name}' already exists"
+                detail=f"Carrier '{payload.name}' already exists",
             )
-        
+
         carrier.name = payload.name  # type: ignore
-    
+
     db.commit()
     db.refresh(carrier)
-    
-    return CarrierRead.from_orm(carrier)
+
+    return CarrierRead.model_validate(carrier)
 
 
 @router.delete("/carriers/{carrier_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -295,15 +306,17 @@ def delete_carrier(
     carrier = db.query(Carrier).filter(Carrier.id == carrier_id).first()
     if not carrier:
         raise HTTPException(status_code=404, detail="Carrier not found")
-    
+
     # Check for dependent plans
-    plans_count = db.query(func.count(Plan.id)).filter(Plan.carrier_id == carrier_id).scalar()
+    plans_count = (
+        db.query(func.count(Plan.id)).filter(Plan.carrier_id == carrier_id).scalar()
+    )
     if plans_count > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot delete carrier: {plans_count} plan(s) reference it"
+            detail=f"Cannot delete carrier: {plans_count} plan(s) reference it",
         )
-    
+
     db.delete(carrier)
     db.commit()
 
@@ -312,6 +325,7 @@ def delete_carrier(
 # Plans CRUD
 # ========================================
 
+
 @router.get("/plans", response_model=PaginatedResponse)
 def list_plans(
     q: str = Query("", description="Search by name"),
@@ -319,42 +333,44 @@ def list_plans(
     carrier_id: int | None = Query(None, description="Filter by carrier ID"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    sort_by: str = Query("name", description="Sort field: name, price_usd, duration_days, data_gb"),
+    sort_by: str = Query(
+        "name", description="Sort field: name, price_usd, duration_days, data_gb"
+    ),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
     """List all plans with search, filters, sorting, and pagination (admin only)."""
     query = db.query(Plan)
-    
+
     # Search
     if q:
         search_term = f"%{q}%"
         query = query.filter(Plan.name.ilike(search_term))
-    
+
     # Filters
     if country_id is not None:
         query = query.filter(Plan.country_id == country_id)
-    
+
     if carrier_id is not None:
         query = query.filter(Plan.carrier_id == carrier_id)
-    
+
     # Count total
     total = query.count()
-    
+
     # Sorting
     sort_column = getattr(Plan, sort_by, Plan.name)
     if sort_order.lower() == "desc":
         query = query.order_by(sort_column.desc())
     else:
         query = query.order_by(sort_column)
-    
+
     # Paginate
     offset = (page - 1) * page_size
     items = query.offset(offset).limit(page_size).all()
-    
+
     return {
-        "items": [PlanRead.from_orm(item) for item in items],
+        "items": [PlanRead.model_validate(item) for item in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -372,33 +388,31 @@ def create_plan(
     # Validate price
     if payload.price_usd < 0:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Price must be non-negative"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Price must be non-negative"
         )
-    
+
     # Validate duration
     if payload.duration_days <= 0:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duration must be positive"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Duration must be positive"
         )
-    
+
     # Validate country exists
     country = db.query(Country).filter(Country.id == payload.country_id).first()
     if not country:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Country with ID {payload.country_id} not found"
+            detail=f"Country with ID {payload.country_id} not found",
         )
-    
+
     # Validate carrier exists
     carrier = db.query(Carrier).filter(Carrier.id == payload.carrier_id).first()
     if not carrier:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Carrier with ID {payload.carrier_id} not found"
+            detail=f"Carrier with ID {payload.carrier_id} not found",
         )
-    
+
     plan = Plan(
         country_id=payload.country_id,
         carrier_id=payload.carrier_id,
@@ -412,8 +426,8 @@ def create_plan(
     db.add(plan)
     db.commit()
     db.refresh(plan)
-    
-    return PlanRead.from_orm(plan)
+
+    return PlanRead.model_validate(plan)
 
 
 @router.put("/plans/{plan_id}", response_model=PlanRead)
@@ -427,60 +441,60 @@ def update_plan(
     plan = db.query(Plan).filter(Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     # Validate and update country_id
     if payload.country_id is not None:
         country = db.query(Country).filter(Country.id == payload.country_id).first()
         if not country:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Country with ID {payload.country_id} not found"
+                detail=f"Country with ID {payload.country_id} not found",
             )
         plan.country_id = payload.country_id  # type: ignore
-    
+
     # Validate and update carrier_id
     if payload.carrier_id is not None:
         carrier = db.query(Carrier).filter(Carrier.id == payload.carrier_id).first()
         if not carrier:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Carrier with ID {payload.carrier_id} not found"
+                detail=f"Carrier with ID {payload.carrier_id} not found",
             )
         plan.carrier_id = payload.carrier_id  # type: ignore
-    
+
     # Update other fields
     if payload.name is not None:
         plan.name = payload.name  # type: ignore
-    
+
     if payload.data_gb is not None:
         plan.data_gb = payload.data_gb  # type: ignore
-    
+
     if payload.duration_days is not None:
         if payload.duration_days <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Duration must be positive"
+                detail="Duration must be positive",
             )
         plan.duration_days = payload.duration_days  # type: ignore
-    
+
     if payload.price_usd is not None:
         if payload.price_usd < 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Price must be non-negative"
+                detail="Price must be non-negative",
             )
         plan.price_usd = payload.price_usd  # type: ignore
-    
+
     if payload.description is not None:
         plan.description = payload.description  # type: ignore
-    
+
     if payload.is_unlimited is not None:
         plan.is_unlimited = payload.is_unlimited  # type: ignore
-    
+
     db.commit()
     db.refresh(plan)
-    
-    return PlanRead.from_orm(plan)
+
+    return PlanRead.model_validate(plan)
 
 
 @router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -493,10 +507,10 @@ def delete_plan(
     plan = db.query(Plan).filter(Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     # Note: Could add check for orders referencing this plan
     # For now, allow deletion (orders will retain plan_id as historical data)
-    
+
     db.delete(plan)
     db.commit()
 
@@ -505,6 +519,7 @@ def delete_plan(
 # CSV Import/Export for Plans
 # ========================================
 
+
 @router.get("/plans/export")
 async def export_plans_csv(
     db: Session = Depends(get_db),
@@ -512,37 +527,48 @@ async def export_plans_csv(
 ):
     """Export all plans to CSV (admin only)."""
     plans = db.query(Plan).all()
-    
+
     # Create CSV in memory
     output = io.StringIO()
     writer = csv.writer(output)
-    
+
     # Write header
-    writer.writerow([
-        'id', 'name', 'country_id', 'carrier_id', 'data_gb', 
-        'is_unlimited', 'duration_days', 'price_usd', 'description'
-    ])
-    
+    writer.writerow(
+        [
+            "id",
+            "name",
+            "country_id",
+            "carrier_id",
+            "data_gb",
+            "is_unlimited",
+            "duration_days",
+            "price_usd",
+            "description",
+        ]
+    )
+
     # Write data
     for plan in plans:
-        writer.writerow([
-            plan.id,
-            plan.name,
-            plan.country_id,
-            plan.carrier_id,
-            str(plan.data_gb),
-            plan.is_unlimited,
-            plan.duration_days,
-            str(plan.price_usd),
-            plan.description or ''
-        ])
-    
+        writer.writerow(
+            [
+                plan.id,
+                plan.name,
+                plan.country_id,
+                plan.carrier_id,
+                str(plan.data_gb),
+                plan.is_unlimited,
+                plan.duration_days,
+                str(plan.price_usd),
+                plan.description or "",
+            ]
+        )
+
     # Return as streaming response
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=plans_export.csv"}
+        headers={"Content-Disposition": "attachment; filename=plans_export.csv"},
     )
 
 
@@ -553,56 +579,73 @@ async def import_plans_csv(
     admin: User = Depends(get_current_admin),
 ):
     """Import plans from CSV (admin only)."""
-    if not file.filename or not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be a CSV"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be a CSV"
         )
-    
+
     # Read CSV
     contents = await file.read()
-    csv_text = contents.decode('utf-8')
+    csv_text = contents.decode("utf-8")
     csv_reader = csv.DictReader(io.StringIO(csv_text))
-    
+
     created_count = 0
     updated_count = 0
     errors = []
-    
-    for row_num, row in enumerate(csv_reader, start=2):  # start=2 because row 1 is header
+
+    for row_num, row in enumerate(
+        csv_reader, start=2
+    ):  # start=2 because row 1 is header
         try:
             # Validate required fields
-            required = ['name', 'country_id', 'carrier_id', 'data_gb', 'duration_days', 'price_usd']
+            required = [
+                "name",
+                "country_id",
+                "carrier_id",
+                "data_gb",
+                "duration_days",
+                "price_usd",
+            ]
             missing = [f for f in required if not row.get(f)]
             if missing:
                 errors.append(f"Row {row_num}: Missing fields: {', '.join(missing)}")
                 continue
-            
+
             # Parse data
             plan_data = {
-                'name': row['name'].strip(),
-                'country_id': int(row['country_id']),
-                'carrier_id': int(row['carrier_id']),
-                'data_gb': Decimal(row['data_gb']),
-                'is_unlimited': row.get('is_unlimited', 'false').lower() in ('true', '1', 'yes'),
-                'duration_days': int(row['duration_days']),
-                'price_usd': Decimal(row['price_usd']),
-                'description': row.get('description', '').strip() or None
+                "name": row["name"].strip(),
+                "country_id": int(row["country_id"]),
+                "carrier_id": int(row["carrier_id"]),
+                "data_gb": Decimal(row["data_gb"]),
+                "is_unlimited": row.get("is_unlimited", "false").lower()
+                in ("true", "1", "yes"),
+                "duration_days": int(row["duration_days"]),
+                "price_usd": Decimal(row["price_usd"]),
+                "description": row.get("description", "").strip() or None,
             }
-            
+
             # Validate country exists
-            country = db.query(Country).filter(Country.id == plan_data['country_id']).first()
+            country = (
+                db.query(Country).filter(Country.id == plan_data["country_id"]).first()
+            )
             if not country:
-                errors.append(f"Row {row_num}: Country ID {plan_data['country_id']} not found")
+                errors.append(
+                    f"Row {row_num}: Country ID {plan_data['country_id']} not found"
+                )
                 continue
-            
+
             # Validate carrier exists
-            carrier = db.query(Carrier).filter(Carrier.id == plan_data['carrier_id']).first()
+            carrier = (
+                db.query(Carrier).filter(Carrier.id == plan_data["carrier_id"]).first()
+            )
             if not carrier:
-                errors.append(f"Row {row_num}: Carrier ID {plan_data['carrier_id']} not found")
+                errors.append(
+                    f"Row {row_num}: Carrier ID {plan_data['carrier_id']} not found"
+                )
                 continue
-            
+
             # Check if plan exists (by id if provided, or create new)
-            plan_id = row.get('id')
+            plan_id = row.get("id")
             if plan_id and plan_id.strip():
                 # Update existing
                 plan = db.query(Plan).filter(Plan.id == int(plan_id)).first()
@@ -611,19 +654,21 @@ async def import_plans_csv(
                         setattr(plan, key, value)
                     updated_count += 1
                 else:
-                    errors.append(f"Row {row_num}: Plan ID {plan_id} not found for update")
+                    errors.append(
+                        f"Row {row_num}: Plan ID {plan_id} not found for update"
+                    )
                     continue
             else:
                 # Create new
                 plan = Plan(**plan_data)
                 db.add(plan)
                 created_count += 1
-        
+
         except ValueError as e:
             errors.append(f"Row {row_num}: Invalid data format - {str(e)}")
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
-    
+
     # Commit if no errors
     if not errors:
         db.commit()
@@ -631,7 +676,7 @@ async def import_plans_csv(
             "success": True,
             "created": created_count,
             "updated": updated_count,
-            "errors": []
+            "errors": [],
         }
     else:
         db.rollback()
@@ -639,5 +684,5 @@ async def import_plans_csv(
             "success": False,
             "created": 0,
             "updated": 0,
-            "errors": errors[:10]  # Limit to first 10 errors
+            "errors": errors[:10],  # Limit to first 10 errors
         }

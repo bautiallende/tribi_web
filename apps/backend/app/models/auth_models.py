@@ -1,18 +1,25 @@
-from datetime import datetime
+import datetime as dt
+import enum
+
 from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
     Column,
+    DateTime,
+    Enum,
+    ForeignKey,
     Integer,
     String,
-    DateTime,
-    Boolean,
-    ForeignKey,
-    Enum,
-    BigInteger,
-    JSON,
+    Text,
 )
 from sqlalchemy.orm import relationship
+
 from .catalog import Base
-import enum
+
+
+def utcnow() -> dt.datetime:
+    return dt.datetime.utcnow()
 
 
 class PaymentProvider(enum.Enum):
@@ -35,9 +42,11 @@ class OrderStatus(enum.Enum):
 
 
 class EsimStatus(enum.Enum):
-    PENDING = "pending"
+    DRAFT = "draft"
+    PENDING_ACTIVATION = "pending_activation"
     ACTIVE = "active"
     FAILED = "failed"
+    EXPIRED = "expired"
 
 
 class User(Base):
@@ -46,7 +55,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     last_login = Column(DateTime, nullable=True)
 
     auth_codes = relationship("AuthCode", back_populates="user")
@@ -58,13 +67,17 @@ class AuthCode(Base):
     __tablename__ = "auth_codes"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Nullable for pre-user codes
-    email = Column(String(255), nullable=False, index=True)  # Store email for rate limiting
+    user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
+    )  # Nullable for pre-user codes
+    email = Column(
+        String(255), nullable=False, index=True
+    )  # Store email for rate limiting
     code = Column(String(6), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False)
     ip_address = Column(String(45), nullable=True)  # IPv6 max length
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
     attempts = Column(Integer, default=0)
 
     user = relationship("User", back_populates="auth_codes")
@@ -81,7 +94,8 @@ class Order(Base):
     amount_minor_units = Column(BigInteger, nullable=False)
     provider_ref = Column(String(255), nullable=True)
     idempotency_key = Column(String(255), nullable=True, unique=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    plan_snapshot = Column(JSON, nullable=True)
 
     user = relationship("User", back_populates="orders")
     plan = relationship("Plan")
@@ -98,10 +112,14 @@ class EsimProfile(Base):
     country_id = Column(Integer, ForeignKey("countries.id"), nullable=True, index=True)
     carrier_id = Column(Integer, ForeignKey("carriers.id"), nullable=True, index=True)
     plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True, index=True)
-    activation_code = Column(String(128), nullable=False)
+    activation_code = Column(String(128), nullable=True)
     iccid = Column(String(64), nullable=True)
-    status = Column(Enum(EsimStatus), default=EsimStatus.PENDING, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(
+        Enum(EsimStatus), default=EsimStatus.PENDING_ACTIVATION, nullable=False
+    )
+    created_at = Column(DateTime, default=utcnow)
+    qr_payload = Column(Text, nullable=True)
+    instructions = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="esim_profiles")
     order = relationship("Order", back_populates="esim_profile")
@@ -117,9 +135,11 @@ class Payment(Base):
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
     provider = Column(Enum(PaymentProvider), nullable=False)
     status = Column(Enum(PaymentStatus), nullable=False)
-    intent_id = Column(String(255), nullable=True, unique=True, index=True)  # Provider's payment intent ID
+    intent_id = Column(
+        String(255), nullable=True, unique=True, index=True
+    )  # Provider's payment intent ID
     raw_payload = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     order = relationship("Order", back_populates="payments")
 

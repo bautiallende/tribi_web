@@ -16,11 +16,11 @@ def test_rate_limit_60_seconds():
     email = "ratelimit60@test.com"
     
     # First request should succeed
-    response1 = client.post("/auth/request-code", json={"email": email})
+    response1 = client.post("/api/auth/request-code", json={"email": email})
     assert response1.status_code == 200
     
     # Second request within 60s should fail
-    response2 = client.post("/auth/request-code", json={"email": email})
+    response2 = client.post("/api/auth/request-code", json={"email": email})
     assert response2.status_code == 429
     assert "wait 60s" in response2.json()["detail"].lower()
 
@@ -31,17 +31,17 @@ def test_rate_limit_60_seconds_expires():
     
     # First request at T=0
     with freeze_time("2024-01-01 12:00:00"):
-        response1 = client.post("/auth/request-code", json={"email": email})
+        response1 = client.post("/api/auth/request-code", json={"email": email})
         assert response1.status_code == 200
     
     # Request at T=59s should fail
     with freeze_time("2024-01-01 12:00:59"):
-        response2 = client.post("/auth/request-code", json={"email": email})
+        response2 = client.post("/api/auth/request-code", json={"email": email})
         assert response2.status_code == 429
     
     # Request at T=61s should succeed
     with freeze_time("2024-01-01 12:01:01"):
-        response3 = client.post("/auth/request-code", json={"email": email})
+        response3 = client.post("/api/auth/request-code", json={"email": email})
         assert response3.status_code == 200
 
 
@@ -53,12 +53,12 @@ def test_rate_limit_24_hours():
     base_time = datetime(2024, 1, 1, 12, 0, 0)
     for i in range(5):
         with freeze_time(base_time + timedelta(seconds=61 * i)):
-            response = client.post("/auth/request-code", json={"email": email})
+            response = client.post("/api/auth/request-code", json={"email": email})
             assert response.status_code == 200, f"Request {i+1} failed"
     
     # 6th request within 24h should fail
     with freeze_time(base_time + timedelta(seconds=61 * 5)):
-        response6 = client.post("/auth/request-code", json={"email": email})
+        response6 = client.post("/api/auth/request-code", json={"email": email})
         assert response6.status_code == 429
         assert "24h" in response6.json()["detail"].lower()
 
@@ -71,17 +71,17 @@ def test_rate_limit_24_hours_expires():
     base_time = datetime(2024, 1, 1, 12, 0, 0)
     for i in range(5):
         with freeze_time(base_time + timedelta(seconds=61 * i)):
-            response = client.post("/auth/request-code", json={"email": email})
+            response = client.post("/api/auth/request-code", json={"email": email})
             assert response.status_code == 200
     
     # 6th request at T=23h should fail
     with freeze_time(base_time + timedelta(hours=23)):
-        response6 = client.post("/auth/request-code", json={"email": email})
+        response6 = client.post("/api/auth/request-code", json={"email": email})
         assert response6.status_code == 429
     
     # Request at T=24h+1s should succeed (oldest code expired)
     with freeze_time(base_time + timedelta(hours=24, seconds=1)):
-        response7 = client.post("/auth/request-code", json={"email": email})
+        response7 = client.post("/api/auth/request-code", json={"email": email})
         assert response7.status_code == 200
 
 
@@ -91,7 +91,7 @@ def test_rate_limit_different_ips():
     
     # First request from IP1
     response1 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": email},
         headers={"X-Forwarded-For": "192.168.1.1"}
     )
@@ -99,7 +99,7 @@ def test_rate_limit_different_ips():
     
     # Second request from IP2 (different IP) should succeed
     response2 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": email},
         headers={"X-Forwarded-For": "192.168.1.2"}
     )
@@ -113,7 +113,7 @@ def test_rate_limit_same_ip():
     
     # First request
     response1 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": email},
         headers={"X-Forwarded-For": ip}
     )
@@ -121,7 +121,7 @@ def test_rate_limit_same_ip():
     
     # Second request from same IP should fail
     response2 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": email},
         headers={"X-Forwarded-For": ip}
     )
@@ -134,7 +134,7 @@ def test_rate_limit_different_emails():
     
     # First request for email1
     response1 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": "user1@test.com"},
         headers={"X-Forwarded-For": ip}
     )
@@ -142,7 +142,7 @@ def test_rate_limit_different_emails():
     
     # Second request for email2 (same IP) should succeed
     response2 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": "user2@test.com"},
         headers={"X-Forwarded-For": ip}
     )
@@ -155,7 +155,7 @@ def test_rate_limit_ip_from_header():
     
     # Request with X-Forwarded-For
     response1 = client.post(
-        "/auth/request-code",
+        "/api/auth/request-code",
         json={"email": email},
         headers={"X-Forwarded-For": "10.0.0.1, 192.168.1.1"}  # Proxy chain
     )
@@ -173,7 +173,7 @@ def test_rate_limit_attempts_tracked():
     email = "attempts@test.com"
     
     # First request
-    response = client.post("/auth/request-code", json={"email": email})
+    response = client.post("/api/auth/request-code", json={"email": email})
     assert response.status_code == 200
     
     # Verify attempts initialized to 0
@@ -188,7 +188,7 @@ def test_rate_limit_created_at_indexed():
     email = "createdat@test.com"
     
     with freeze_time("2024-01-01 12:00:00"):
-        response = client.post("/auth/request-code", json={"email": email})
+        response = client.post("/api/auth/request-code", json={"email": email})
         assert response.status_code == 200
     
     # Verify created_at was stored

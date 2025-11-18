@@ -9,6 +9,7 @@ pytest
 pytest-asyncio
 freezegun
 httpx
+requests
 passlib[bcrypt]
 python-jose[cryptography]
 pymysql

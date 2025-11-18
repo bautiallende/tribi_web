@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { CountryPicker } from '@/components/CountryPicker'
 import { Badge } from '@tribi/ui'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 
 interface Country {
@@ -177,7 +177,7 @@ export default function Home() {
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900 dark:text-white">Trusted by Major Carriers</h2>
             <p className="text-lg text-gray-700 dark:text-gray-300">
-              We partner with the world's leading telecommunications networks
+              We partner with the world&apos;s leading telecommunications networks
             </p>
           </div>
 
@@ -215,7 +215,7 @@ export default function Home() {
         <div className="container-max text-center">
           <h2 className="text-4xl md:text-5xl font-bold mb-6 text-gray-900 dark:text-white">Ready to Travel Connected?</h2>
           <p className="text-lg text-gray-700 dark:text-gray-300 max-w-2xl mx-auto mb-8">
-            Join thousands of travelers who've already ditched expensive roaming plans
+            Join thousands of travelers who&apos;ve already ditched expensive roaming plans
           </p>
           <button className="px-10 py-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95">
             Explore Plans Now

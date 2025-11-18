@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { SearchInput, Pagination, Dialog, useToast } from "@tribi/ui";
-import { Skeleton } from "@tribi/ui";
+import { Dialog, Pagination, SearchInput, Skeleton, useToast } from "@tribi/ui";
+import { useCallback, useEffect, useState } from "react";
 
 interface Country {
   id: number;

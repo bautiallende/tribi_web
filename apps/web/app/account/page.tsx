@@ -6,9 +6,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Button, Card } from '@tribi/ui';
 import { useRouter } from 'next/navigation';
-import { Card, Button } from '@tribi/ui';
+import { useCallback, useEffect, useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
 
@@ -18,65 +18,77 @@ interface User {
   name: string;
 }
 
+interface PlanSnapshot {
+  id?: number;
+  name?: string;
+  description?: string;
+  country_name?: string;
+  country_iso2?: string;
+  carrier_name?: string;
+  data_gb?: number;
+  duration_days?: number;
+  price_minor_units?: number;
+  currency?: string;
+}
+
 interface Order {
   id: number;
-  plan_id: number;
+  plan_id?: number;
   status: string;
   currency: string;
   amount_minor_units: number;
+  amount_major?: string;
   created_at: string;
+  plan_snapshot?: PlanSnapshot | null;
 }
 
 interface EsimProfile {
   id: number;
-  order_id: number;
-  activation_code: string;
+  order_id: number | null;
+  activation_code: string | null;
+  iccid: string | null;
   status: string;
+  created_at: string;
+  qr_payload?: string | null;
+  instructions?: string | null;
 }
 
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [esimData, setEsimData] = useState<Record<number, EsimProfile>>({});
+  const [esims, setEsims] = useState<Record<number, EsimProfile>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-    if (!token) {
-      router.push('/auth');
-      return;
-    }
+  const fetchUserProfile = useCallback(
+    async (token: string) => {
+      try {
+        console.log('👤 Fetching user profile...');
+        const response = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-    fetchUserProfile(token);
-    fetchOrders(token);
-  }, [router]);
+        console.log('📥 Profile response:', response.status);
 
-  const fetchUserProfile = async (token: string) => {
-    try {
-      console.log('👤 Fetching user profile...');
-      const response = await fetch(`${API_BASE}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile');
+        }
 
-      console.log('📥 Profile response:', response.status);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch profile');
+        const data = await response.json();
+        console.log('✅ User profile loaded:', data);
+        setUser(data);
+      } catch (err) {
+        console.error('❌ Profile error:', err);
+        setError(err instanceof Error ? err.message : 'Error fetching profile');
+        router.push('/auth');
+        throw err instanceof Error ? err : new Error('Failed to load profile');
       }
+    },
+    [router],
+  );
 
-      const data = await response.json();
-      console.log('✅ User profile loaded:', data);
-      setUser(data);
-    } catch (err) {
-      console.error('❌ Profile error:', err);
-      setError(err instanceof Error ? err.message : 'Error fetching profile');
-      router.push('/auth');
-    }
-  };
-
-  const fetchOrders = async (token: string) => {
+  const fetchOrders = useCallback(async (token: string) => {
     try {
       console.log('📦 Fetching orders...');
       const response = await fetch(`${API_BASE}/api/orders/mine`, {
@@ -92,35 +104,64 @@ export default function AccountPage() {
       const data = await response.json();
       console.log('✅ Orders loaded:', data.length, 'orders');
       setOrders(data);
-
-      // Fetch eSIM data for each paid order
-      data.forEach(async (order: Order) => {
-        if (order.status === 'paid') {
-          try {
-            const esimResponse = await fetch(`${API_BASE}/api/esims/activate`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ order_id: order.id }),
-            });
-
-            if (esimResponse.ok) {
-              const esim = await esimResponse.json();
-              setEsimData((prev) => ({ ...prev, [order.id]: esim }));
-            }
-          } catch (err) {
-            console.error('Error fetching eSIM:', err);
-          }
-        }
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error fetching orders');
-    } finally {
-      setLoading(false);
+      throw err instanceof Error ? err : new Error('Failed to load orders');
     }
-  };
+  }, []);
+
+  const fetchEsims = useCallback(async (token: string) => {
+    try {
+      console.log('📶 Fetching eSIMs...');
+      const response = await fetch(`${API_BASE}/api/esims/mine`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log('📥 eSIM response:', response.status);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch eSIMs');
+      }
+
+      const data: EsimProfile[] = await response.json();
+      const mapped = data.reduce<Record<number, EsimProfile>>((acc, esim) => {
+        if (typeof esim.order_id === 'number') {
+          acc[esim.order_id] = esim;
+        }
+        return acc;
+      }, {});
+      setEsims(mapped);
+    } catch (err) {
+      console.error('❌ eSIM error:', err);
+      throw err instanceof Error ? err : new Error('Failed to fetch eSIMs');
+    }
+  }, []);
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (!token) {
+      router.push('/auth');
+      return;
+    }
+
+    const loadAccount = async () => {
+      try {
+        setLoading(true);
+        await Promise.all([
+          fetchUserProfile(token),
+          fetchOrders(token),
+          fetchEsims(token),
+        ]);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load account';
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAccount();
+  }, [router, fetchUserProfile, fetchOrders, fetchEsims]);
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
@@ -205,57 +246,129 @@ export default function AccountPage() {
             <div className="space-y-4">
               {orders.map((order) => (
                 <Card key={order.id} className="p-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Order ID</p>
-                      <p className="text-lg font-medium text-gray-900">#{order.id}</p>
+                  <div className="flex flex-col gap-4 mb-4">
+                    <div className="flex flex-wrap justify-between gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Plan</p>
+                        <p className="text-lg font-medium text-gray-900">
+                          {order.plan_snapshot?.name || `Plan #${order.plan_id}`}
+                        </p>
+                        {order.plan_snapshot?.country_name && (
+                          <p className="text-sm text-gray-500">
+                            {order.plan_snapshot.country_name}
+                            {order.plan_snapshot.country_iso2
+                              ? ` (${order.plan_snapshot.country_iso2.toUpperCase()})`
+                              : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Status</p>
+                        <p
+                          className={`text-lg font-medium ${
+                            order.status === 'paid'
+                              ? 'text-green-600'
+                              : order.status === 'failed'
+                              ? 'text-red-600'
+                              : 'text-yellow-600'
+                          }`}
+                        >
+                          {order.status.toUpperCase()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Amount</p>
+                        <p className="text-lg font-medium text-gray-900">
+                          {order.amount_major
+                            ? `${order.amount_major} ${order.currency}`
+                            : `${(order.amount_minor_units / 100).toFixed(2)} ${order.currency}`}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Date</p>
+                        <p className="text-lg font-medium text-gray-900">
+                          {new Date(order.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Status</p>
-                      <p className={`text-lg font-medium ${
-                        order.status === 'paid'
-                          ? 'text-green-600'
-                          : order.status === 'failed'
-                          ? 'text-red-600'
-                          : 'text-yellow-600'
-                      }`}>
-                        {order.status.toUpperCase()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Amount</p>
-                      <p className="text-lg font-medium text-gray-900">
-                        {(order.amount_minor_units / 100).toFixed(2)} {order.currency}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Date</p>
-                      <p className="text-lg font-medium text-gray-900">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
+
+                    {(order.plan_snapshot?.data_gb || order.plan_snapshot?.duration_days || order.plan_snapshot?.carrier_name) && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
+                        {order.plan_snapshot?.data_gb && (
+                          <div>
+                            <p className="text-sm text-gray-500">Data</p>
+                            <p className="text-base font-semibold text-gray-900">
+                              {order.plan_snapshot.data_gb} GB
+                            </p>
+                          </div>
+                        )}
+                        {order.plan_snapshot?.duration_days && (
+                          <div>
+                            <p className="text-sm text-gray-500">Duration</p>
+                            <p className="text-base font-semibold text-gray-900">
+                              {order.plan_snapshot.duration_days} days
+                            </p>
+                          </div>
+                        )}
+                        {order.plan_snapshot?.carrier_name && (
+                          <div>
+                            <p className="text-sm text-gray-500">Carrier</p>
+                            <p className="text-base font-semibold text-gray-900">
+                              {order.plan_snapshot.carrier_name}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* eSIM Data */}
-                  {esimData[order.id] && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <h3 className="font-semibold text-gray-900 mb-2">eSIM Activation Code</h3>
-                      <div className="flex items-center justify-between bg-gray-50 p-4 rounded">
-                        <code className="font-mono text-sm text-gray-900 break-all">
-                          {esimData[order.id].activation_code}
-                        </code>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(esimData[order.id].activation_code);
-                          }}
-                          className="ml-4 px-3 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
-                        >
-                          Copy
-                        </button>
+                  {esims[order.id] && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">eSIM Activation</h3>
+                          <p className="text-xs text-gray-500">
+                            Status: <span className="font-medium">{esims[order.id].status}</span>
+                          </p>
+                        </div>
+                        {esims[order.id].activation_code && (
+                          <div className="flex items-center gap-2">
+                            <code className="font-mono text-sm text-gray-900 break-all">
+                              {esims[order.id].activation_code}
+                            </code>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(esims[order.id].activation_code ?? '');
+                              }}
+                              className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Status: <span className="font-medium">{esimData[order.id].status}</span>
-                      </p>
+
+                      {esims[order.id].iccid && (
+                        <p className="text-sm text-gray-600">
+                          ICCID: <span className="font-mono text-gray-900">{esims[order.id].iccid}</span>
+                        </p>
+                      )}
+
+                      {esims[order.id].qr_payload && (
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">QR Payload</p>
+                          <code className="block bg-gray-50 p-3 rounded text-xs text-gray-900">
+                            {esims[order.id].qr_payload}
+                          </code>
+                        </div>
+                      )}
+
+                      {esims[order.id].instructions && (
+                        <p className="text-sm text-gray-600">
+                          {esims[order.id].instructions}
+                        </p>
+                      )}
                     </div>
                   )}
                 </Card>

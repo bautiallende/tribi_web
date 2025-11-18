@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { SearchInput, Pagination, Dialog, useToast, Skeleton } from "@tribi/ui";
+import { Dialog, Pagination, SearchInput, Skeleton, useToast } from "@tribi/ui";
+import { useCallback, useEffect, useState } from "react";
 
 interface Carrier {
   id: number;

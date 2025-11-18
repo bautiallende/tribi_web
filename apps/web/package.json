@@ -1,22 +1,21 @@
 {
-  "name": "@tribi/web",
+  "name": "web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "lint": "next lint"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.8.4",
-    "@tribi/ui": "file:../../packages/ui",
+    "@tribi/ui": "*",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "i18next": "^23.7.6",
     "next": "14.0.3",
-    "next-intl": "^4.5.2",
+    "next-intl": "^4.5.3",
     "react": "^18",
     "react-dom": "^18",
     "react-i18next": "^13.5.0",

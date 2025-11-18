@@ -1,22 +1,84 @@
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import {
+    LinkingOptions,
+    NavigationContainer,
+    NavigatorScreenParams,
+} from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, LogBox, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getToken } from './src/api/client';
 
 // Import screens
-import AuthEmailScreen from './src/screens/AuthEmailScreen';
-import AuthCodeScreen from './src/screens/AuthCodeScreen';
-import CheckoutScreen from './src/screens/CheckoutScreen';
 import AccountScreen from './src/screens/AccountScreen';
+import AuthCodeScreen from './src/screens/AuthCodeScreen';
+import AuthEmailScreen from './src/screens/AuthEmailScreen';
+import CheckoutScreen from './src/screens/CheckoutScreen';
 import CountriesScreen from './src/screens/CountriesScreen';
 import PlansScreen from './src/screens/PlansScreen';
 
-const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
+declare const ErrorUtils: {
+  getGlobalHandler?: () => ((error: unknown, isFatal?: boolean) => void) | undefined;
+  setGlobalHandler?: (handler: (error: unknown, isFatal?: boolean) => void) => void;
+} | undefined;
+
+const suppressExpoUpdateCrashes = () => {
+  const messageSubstring = 'failed to download remote updates';
+
+  LogBox.ignoreLogs([messageSubstring]);
+
+  if (!ErrorUtils?.getGlobalHandler || !ErrorUtils?.setGlobalHandler) {
+    return;
+  }
+
+  const previousHandler = ErrorUtils.getGlobalHandler?.();
+  ErrorUtils.setGlobalHandler?.((error, isFatal) => {
+    const normalizedError = (error ?? {}) as { message?: string };
+    const errorMessage =
+      normalizedError && typeof normalizedError.message === 'string' ? normalizedError.message : '';
+    if (errorMessage.includes(messageSubstring)) {
+      console.log('🚫 OTA update error ignored in dev build:', errorMessage);
+      return;
+    }
+
+    if (previousHandler) {
+      previousHandler(error, isFatal);
+    }
+  });
+};
+
+suppressExpoUpdateCrashes();
+
+type MainTabParamList = {
+  Countries: undefined;
+  Account: undefined;
+};
+
+type RootStackParamList = {
+  AuthEmail: undefined;
+  AuthCode: undefined;
+  MainTabs: NavigatorScreenParams<MainTabParamList>;
+  Plans: { iso2: string; countryName?: string };
+  Checkout: { orderId: string };
+};
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ['tribi://', 'https://tribi.app'],
+  config: {
+    screens: {
+      AuthEmail: 'auth',
+      AuthCode: 'auth/code',
+      MainTabs: 'app',
+      Plans: 'plans/:iso2',
+      Checkout: 'checkout/:orderId',
+    },
+  },
+};
+
+const Stack = createStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 
 // Tab Navigator for main authenticated app
 function MainTabs() {
@@ -98,25 +160,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <NavigationContainer
-        linking={{
-          prefixes: ['tribi://', 'https://tribi.app'],
-          config: {
-            screens: {
-              AuthEmail: 'auth',
-              AuthCode: 'auth/code',
-              MainTabs: {
-                screens: {
-                  Countries: 'browse',
-                  Account: 'account',
-                },
-              },
-              Plans: 'plans/:iso2',
-              Checkout: 'checkout/:orderId',
-            },
-          },
-        }}
-      >
+      <NavigationContainer linking={linking}>
         <Stack.Navigator
           initialRouteName={isAuthenticated ? 'MainTabs' : 'AuthEmail'}
           screenOptions={{

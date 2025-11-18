@@ -16,6 +16,7 @@ This repository contains the source code for Tribi, a service for selling eSIMs 
 ## Quick Start
 
 ### Prerequisites
+
 - Docker & Docker Compose
 - Python 3.10+ (for backend)
 - Node.js 18+ (for web)
@@ -24,17 +25,20 @@ This repository contains the source code for Tribi, a service for selling eSIMs 
 ### Setup
 
 1. **Clone and enter directory:**
+
    ```bash
    git clone <repository-url>
    cd tribi
    ```
 
 2. **Set up environment variables:**
+
    ```bash
    cp .env.example .env
    ```
-   
+
    Key variables to configure:
+
    ```
    MYSQL_HOST=localhost
    MYSQL_PORT=3306
@@ -55,16 +59,19 @@ This repository contains the source code for Tribi, a service for selling eSIMs 
 ### Running the Application
 
 **Start all services (infrastructure + backend + web):**
+
 ```bash
 make dev
 ```
 
 This command:
+
 - Starts Docker Compose (MySQL + MailHog)
 - Launches backend on `http://localhost:8000`
 - Launches web app on `http://localhost:3000`
 
 **Start individual services:**
+
 ```bash
 make infra-up      # Start Docker services only
 make backend       # Backend only (hot reload)
@@ -74,21 +81,22 @@ make mobile        # Mobile app with Expo
 
 ## Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `make dev` | Start all services (docker, backend, web) |
-| `make backend` | Start backend with hot reload |
-| `make web` | Start web with hot reload |
-| `make mobile` | Start mobile app |
-| `make test` | Run backend tests + build web |
-| `make lint` | Run pre-commit hooks |
-| `make build` | Build all apps |
-| `make infra-up` | Start Docker services |
-| `make infra-down` | Stop Docker services |
+| Command           | Description                               |
+| ----------------- | ----------------------------------------- |
+| `make dev`        | Start all services (docker, backend, web) |
+| `make backend`    | Start backend with hot reload             |
+| `make web`        | Start web with hot reload                 |
+| `make mobile`     | Start mobile app                          |
+| `make test`       | Run backend tests + build web             |
+| `make lint`       | Run pre-commit hooks                      |
+| `make build`      | Build all apps                            |
+| `make infra-up`   | Start Docker services                     |
+| `make infra-down` | Stop Docker services                      |
 
 ## Per-App Commands
 
 ### Backend
+
 ```bash
 cd apps/backend
 
@@ -106,6 +114,7 @@ alembic upgrade head
 ```
 
 ### Web
+
 ```bash
 cd apps/web
 
@@ -120,6 +129,7 @@ npm run lint
 ```
 
 ### Mobile
+
 ```bash
 cd apps/mobile
 
@@ -140,12 +150,14 @@ The app includes a complete catalog feature for browsing and filtering eSIM plan
 ### Initial Setup
 
 1. **Apply database migrations:**
+
    ```bash
    cd apps/backend
    alembic upgrade head
    ```
 
 2. **Seed initial data (countries, carriers, plans):**
+
    ```bash
    python -c "from app.seed import seed_database; seed_database()"
    ```
@@ -157,17 +169,20 @@ The app includes a complete catalog feature for browsing and filtering eSIM plan
 ### Accessing the Catalog
 
 **Web:**
+
 - Home page: `http://localhost:3000/`
 - Search for countries with autocomplete
 - Click a country to view available plans
 - Plans sorted by price (lowest first)
 
 **Mobile:**
+
 - Browse countries with search functionality
 - Tap a country to see its plans
 - Display plan details (data, duration, price)
 
 **API:**
+
 - `GET /api/countries` - List all countries, optional search: `?q=argentina`
 - `GET /api/plans` - List plans with optional filters:
   - `?country=ar` - Plans for Argentina
@@ -181,6 +196,7 @@ See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for endpoint specifications and da
 ## API Endpoints
 
 ### Health Check
+
 - **Backend:** `GET http://localhost:8000/health`
   - Response: `{"status": "ok"}`
 - **Web:** `GET http://localhost:3000/health`
@@ -271,10 +287,12 @@ alembic downgrade -1
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/ci.yml`) runs on:
+
 - Push to `main` and `develop` branches
 - Pull requests
 
 **Matrix Builds:**
+
 - Backend: Python 3.10, 3.11
 - Web: Node 18.x, 20.x
 
@@ -283,16 +301,19 @@ Each job runs pytest/npm build independently.
 ## Code Quality
 
 Pre-commit hooks configured in `.pre-commit-config.yaml`:
+
 - **Python:** black, ruff (formatting + linting)
 - **JavaScript/TypeScript:** eslint, prettier (linting + formatting)
 - **General:** trailing whitespace, end-of-file fixer, YAML check
 
 Install hooks:
+
 ```bash
 pre-commit install
 ```
 
 Run manually:
+
 ```bash
 pre-commit run --all-files
 ```
@@ -318,6 +339,7 @@ EXPO_PUBLIC_API_BASE=http://localhost:8000
 ## Troubleshooting
 
 ### Port already in use
+
 ```bash
 # Kill process on port 8000 (backend)
 lsof -ti:8000 | xargs kill -9
@@ -327,6 +349,7 @@ lsof -ti:3000 | xargs kill -9
 ```
 
 ### Docker issues
+
 ```bash
 # Clean up Docker
 docker compose -f infrastructure/docker-compose.yml down
@@ -337,6 +360,7 @@ make infra-up
 ```
 
 ### Python dependencies
+
 ```bash
 cd apps/backend
 pip install --upgrade pip
@@ -354,4 +378,3 @@ pip install -r requirements.txt
 ## License
 
 See LICENSE file.
-

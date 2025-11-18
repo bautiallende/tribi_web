@@ -1,3 +1,8 @@
+const localApiBase =
+  process.env.EXPO_PUBLIC_API_BASE || "http://192.168.1.102:8000";
+const disableRemoteUpdates =
+  process.env.EXPO_PUBLIC_DISABLE_REMOTE_UPDATES !== "false";
+
 export default {
   expo: {
     name: "Tribi",
@@ -8,36 +13,66 @@ export default {
     scheme: "tribi",
     splash: {
       resizeMode: "contain",
-      backgroundColor: "#3B82F6"
+      backgroundColor: "#3B82F6",
     },
-    assetBundlePatterns: [
-      "**/*"
-    ],
+    assetBundlePatterns: ["**/*"],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "app.tribi.mobile"
+      bundleIdentifier: "app.tribi.mobile",
+      infoPlist: disableRemoteUpdates
+        ? {
+            EXUpdatesEnabled: false,
+            EXUpdatesCheckOnLaunch: "NEVER",
+          }
+        : undefined,
     },
     android: {
       package: "app.tribi.mobile",
-      usesCleartextTraffic: true
+      usesCleartextTraffic: true,
+      softwareKeyboardLayoutMode: "pan",
+      manifestPlaceholders: disableRemoteUpdates
+        ? {
+            "expo.modules.updates.ENABLED": "false",
+            "expo.modules.updates.EXPO_RUNTIME_VERSION": "1.0.0",
+            "expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH": "NEVER",
+          }
+        : undefined,
     },
     extra: {
-      apiBase: "http://192.168.1.102:8000",
+      apiBase: localApiBase,
       eas: {
-        projectId: undefined
-      }
+        projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
+      },
+      disableRemoteUpdates,
     },
-    // Deshabilitar completamente el sistema de actualizaciones para desarrollo
-    updates: {
-      enabled: false,
-      checkAutomatically: "OFF",
-      fallbackToCacheTimeout: 0,
-      url: undefined
-    },
+    updates: disableRemoteUpdates
+      ? {
+          enabled: false,
+          checkAutomatically: "ON_ERROR_RECOVERY",
+          fallbackToCacheTimeout: 0,
+          url: undefined,
+        }
+      : {
+          enabled: true,
+          checkAutomatically: "ON_LOAD",
+          fallbackToCacheTimeout: 30000,
+        },
     runtimeVersion: {
-      policy: "nativeVersion"
+      policy: "nativeVersion",
     },
-    // Asegurar que no se intente cargar expo-updates
-    plugins: []
-  }
+    plugins: [
+      [
+        "expo-updates",
+        disableRemoteUpdates
+          ? {
+              username: undefined,
+              checkAutomatically: "ON_ERROR_RECOVERY",
+              runtimeVersion: {
+                policy: "nativeVersion",
+              },
+            }
+          : undefined,
+      ],
+    ].filter(Boolean),
+  },
 };

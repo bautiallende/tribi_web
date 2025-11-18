@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { Input, Badge } from '@tribi/ui'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE
+  ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/$/, '')
+  : undefined
+const COUNTRIES_ENDPOINT = `${API_BASE ?? ''}/api/countries`
 
 interface Country {
   id: number
@@ -31,6 +34,7 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
   const [filteredCountries, setFilteredCountries] = useState<Country[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const searchRef = useRef<HTMLDivElement>(null)
 
   // Fetch all countries on mount
@@ -38,13 +42,23 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
     const fetchCountries = async () => {
       try {
         setIsLoading(true)
-        const response = await fetch(`${API_BASE}/api/countries`)
-        if (response.ok) {
-          const data = await response.json()
-          setCountries(data)
+        console.log('🌍 Fetching countries from', COUNTRIES_ENDPOINT)
+        const response = await fetch(COUNTRIES_ENDPOINT)
+        console.log('🌍 Country response status:', response.status)
+        if (!response.ok) {
+          throw new Error(`Failed to load countries (${response.status})`)
         }
+
+        const data: Country[] = await response.json()
+        console.log('🌍 Countries loaded:', data.length, data[0])
+        setCountries(data)
+        setFilteredCountries(data)
+        setErrorMessage('')
       } catch (error) {
         console.error('Failed to fetch countries:', error)
+        setErrorMessage('Unable to load countries. Please try again.')
+        setCountries([])
+        setFilteredCountries([])
       } finally {
         setIsLoading(false)
       }
@@ -55,14 +69,16 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
 
   // Filter countries based on search input
   useEffect(() => {
-    if (search.trim() === '') {
-      setFilteredCountries([])
-      setIsOpen(false)
+    const trimmed = search.trim()
+    if (trimmed === '') {
+      setFilteredCountries(countries)
+      setIsOpen(countries.length > 0)
     } else {
+      const lower = trimmed.toLowerCase()
       const filtered = countries.filter(
         (country) =>
-          country.name.toLowerCase().includes(search.toLowerCase()) ||
-          country.iso2.toLowerCase().includes(search.toLowerCase())
+          country.name.toLowerCase().includes(lower) ||
+          country.iso2.toLowerCase().includes(lower)
       )
       setFilteredCountries(filtered)
       setIsOpen(true)
@@ -82,9 +98,15 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
   }, [])
 
   const handleSelectCountry = (country: Country) => {
+    console.log('🧭 Country selected:', country)
     setSearch(country.name)
     setIsOpen(false)
     onSelect(country)
+  }
+
+  const handleSearchChange = (value: string) => {
+    console.log('🔍 Country search query:', value)
+    setSearch(value)
   }
 
   return (
@@ -94,8 +116,8 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
           type="text"
           placeholder="🔍 Search for a country..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onFocus={() => search && setIsOpen(true)}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          onFocus={() => setIsOpen(filteredCountries.length > 0 && countries.length > 0)}
           className="pl-12 pr-4 text-lg h-14 shadow-md hover:shadow-lg transition-shadow"
           aria-label="Search countries"
           aria-autocomplete="list"
@@ -111,7 +133,13 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
       </div>
 
       {/* Dropdown */}
-      {isOpen && (
+      {errorMessage && (
+        <div className="absolute z-10 w-full mt-2 bg-red-50 border-2 border-red-200 rounded-xl shadow-xl p-4 text-red-700">
+          {errorMessage}
+        </div>
+      )}
+
+      {isOpen && !errorMessage && (
         <div className="absolute z-10 w-full mt-2 bg-white dark:bg-slate-900 border-2 border-gray-300 dark:border-gray-600 rounded-xl shadow-xl max-h-96 overflow-y-auto animate-slide-up">
           {isLoading ? (
             <div className="px-4 py-8 text-center text-gray-700 dark:text-gray-300">
@@ -153,7 +181,7 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
             <div className="px-4 py-12 text-center">
               <div className="text-5xl mb-3">🌍</div>
               <p className="text-gray-900 dark:text-gray-100 font-medium">No countries found</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Try searching for "{search}"</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Try searching for &ldquo;{search}&rdquo;</p>
             </div>
           ) : null}
         </div>

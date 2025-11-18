@@ -6,11 +6,14 @@
 
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button, Card } from '@tribi/ui';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE
+  ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/$/, '')
+  : '';
+const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 export default function AuthPage() {
   const router = useRouter();
@@ -29,7 +32,7 @@ export default function AuthPage() {
 
     try {
       console.log('🔑 Requesting OTP for:', email);
-      const response = await fetch(`${API_BASE}/api/auth/request-code`, {
+      const response = await fetch(apiUrl('/api/auth/request-code'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -63,7 +66,7 @@ export default function AuthPage() {
 
     try {
       console.log('🔐 Verifying code for:', email);
-      const response = await fetch(`${API_BASE}/api/auth/verify`, {
+      const response = await fetch(apiUrl('/api/auth/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -80,7 +83,11 @@ export default function AuthPage() {
 
       const data = await response.json();
       console.log('✅ Login successful:', data);
-      const token = data.token;
+      const token: string | undefined = data.token || data.access_token;
+
+      if (!token) {
+        throw new Error('Token missing in response');
+      }
 
       // Store JWT in httpOnly cookie via API call (server-side)
       // For now, store in localStorage as fallback
@@ -90,7 +97,7 @@ export default function AuthPage() {
 
       setMessage('Login successful! Redirecting...');
       setTimeout(() => {
-        router.push('/account');
+        router.replace('/account');
       }, 1000);
     } catch (err) {
       console.error('❌ Verify error:', err);

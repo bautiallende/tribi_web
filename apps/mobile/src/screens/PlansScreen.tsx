@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-  Alert,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { plansAPI, ordersAPI, getToken } from '../api/client';
+import { getToken, ordersAPI, plansAPI } from '../api/client';
 
 interface Plan {
   id: number;
@@ -78,8 +78,8 @@ export default function PlansScreen({ route, navigation }: PlansScreenProps) {
       const order = await ordersAPI.create(plan.id);
       navigation.navigate('Checkout', {
         orderId: order.id,
-        planName: plan.name,
-        amount: plan.price_usd,
+        planName: order.plan_snapshot?.name || plan.name,
+        amount: order.amount_major || plan.price_usd,
       });
     } catch (error) {
       Alert.alert(

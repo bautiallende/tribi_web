@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Button, SearchInput, Pagination, Dialog, Skeleton, useToast } from '@tribi/ui';
+import { Button, Dialog, Pagination, SearchInput, Skeleton, useToast } from '@tribi/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Country {
   id: number;
@@ -85,18 +85,7 @@ export default function PlansPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
-  // Fetch countries and carriers for dropdowns
-  useEffect(() => {
-    fetchCountries();
-    fetchCarriers();
-  }, []);
-
-  // Fetch plans when filters/search/sort/page changes
-  useEffect(() => {
-    fetchPlans();
-  }, [searchQuery, countryFilter, carrierFilter, sortBy, sortOrder, currentPage]);
-
-  const fetchCountries = async () => {
+  const fetchCountries = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/countries?page_size=100', {
         credentials: 'include',
@@ -108,9 +97,9 @@ export default function PlansPage() {
     } catch (error) {
       console.error('Failed to fetch countries:', error);
     }
-  };
+  }, []);
 
-  const fetchCarriers = async () => {
+  const fetchCarriers = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/carriers?page_size=100', {
         credentials: 'include',
@@ -122,9 +111,9 @@ export default function PlansPage() {
     } catch (error) {
       console.error('Failed to fetch carriers:', error);
     }
-  };
+  }, []);
 
-  const fetchPlans = async () => {
+  const fetchPlans = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -156,7 +145,18 @@ export default function PlansPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [carrierFilter, countryFilter, currentPage, pageSize, searchQuery, showToast, sortBy, sortOrder]);
+
+  // Fetch countries and carriers for dropdowns
+  useEffect(() => {
+    fetchCountries();
+    fetchCarriers();
+  }, [fetchCountries, fetchCarriers]);
+
+  // Fetch plans when filters/search/sort/page changes
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
