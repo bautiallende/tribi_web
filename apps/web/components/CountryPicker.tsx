@@ -1,12 +1,8 @@
 'use client'
 
+import { apiFetch, apiUrl } from '@/lib/apiConfig'
 import { Input } from '@tribi/ui'
 import { useEffect, useRef, useState } from 'react'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE
-  ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/$/, '')
-  : undefined
-const COUNTRIES_ENDPOINT = `${API_BASE ?? ''}/api/countries`
 
 interface Country {
   id: number
@@ -41,21 +37,20 @@ export function CountryPicker({ onSelect }: CountryPickerProps) {
     const fetchCountries = async () => {
       try {
         setIsLoading(true)
-        console.log('🌍 Fetching countries from', COUNTRIES_ENDPOINT)
-        const response = await fetch(COUNTRIES_ENDPOINT)
-        console.log('🌍 Country response status:', response.status)
-        if (!response.ok) {
-          throw new Error(`Failed to load countries (${response.status})`)
-        }
-
-        const data: Country[] = await response.json()
-        console.log('🌍 Countries loaded:', data.length, data[0])
+        const endpoint = apiUrl('/api/countries')
+        console.log('🌍 Fetching countries from:', endpoint)
+        
+        const data = await apiFetch<Country[]>('/api/countries')
+        
+        console.log(`✅ Countries loaded: ${data.length} countries`)
+        console.log('📍 Sample country:', data[0])
         setCountries(data)
         setFilteredCountries(data)
         setErrorMessage('')
       } catch (error) {
-        console.error('Failed to fetch countries:', error)
-        setErrorMessage('Unable to load countries. Please try again.')
+        console.error('❌ Failed to fetch countries:', error)
+        const message = error instanceof Error ? error.message : 'Unable to load countries. Please try again.'
+        setErrorMessage(message)
         setCountries([])
         setFilteredCountries([])
       } finally {

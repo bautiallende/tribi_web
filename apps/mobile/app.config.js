@@ -60,19 +60,5 @@ export default {
     runtimeVersion: {
       policy: "nativeVersion",
     },
-    plugins: [
-      [
-        "expo-updates",
-        disableRemoteUpdates
-          ? {
-              username: undefined,
-              checkAutomatically: "ON_ERROR_RECOVERY",
-              runtimeVersion: {
-                policy: "nativeVersion",
-              },
-            }
-          : undefined,
-      ],
-    ].filter(Boolean),
   },
 };

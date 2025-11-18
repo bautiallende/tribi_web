@@ -1,19 +1,15 @@
 /**
  * Auth page - OTP login flow
- * POST /auth/request-code to get OTP
- * POST /auth/verify to verify and get JWT
+ * POST /api/auth/request-code to get OTP
+ * POST /api/auth/verify to verify and get JWT
  */
 
 'use client';
 
+import { apiFetch, apiUrl } from '@/lib/apiConfig';
 import { Button, Card } from '@tribi/ui';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE
-  ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/$/, '')
-  : '';
-const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 export default function AuthPage() {
   const router = useRouter();
@@ -32,23 +28,16 @@ export default function AuthPage() {
 
     try {
       console.log('🔑 Requesting OTP for:', email);
-      const response = await fetch(apiUrl('/api/auth/request-code'), {
+      console.log('🔗 Endpoint:', apiUrl('/api/auth/request-code'));
+      
+      const data = await apiFetch('/api/auth/request-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ email }),
       });
 
-      console.log('📥 Response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Error response:', errorData);
-        throw new Error(errorData.detail || 'Error requesting code');
-      }
-
       console.log('✅ OTP sent successfully');
-      setMessage(`OTP sent to ${email}. Check your email!`);
+      setMessage(`OTP sent to ${email}. Check your email or backend console!`);
       setStep('otp');
     } catch (err) {
       console.error('❌ Request error:', err);
@@ -66,22 +55,14 @@ export default function AuthPage() {
 
     try {
       console.log('🔐 Verifying code for:', email);
-      const response = await fetch(apiUrl('/api/auth/verify'), {
+      console.log('🔗 Endpoint:', apiUrl('/api/auth/verify'));
+      
+      const data = await apiFetch<{ token?: string; access_token?: string }>('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ email, code }),
       });
 
-      console.log('📥 Verify response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Verify error:', errorData);
-        throw new Error(errorData.detail || 'Invalid code');
-      }
-
-      const data = await response.json();
       console.log('✅ Login successful:', data);
       const token: string | undefined = data.token || data.access_token;
 
@@ -89,10 +70,10 @@ export default function AuthPage() {
         throw new Error('Token missing in response');
       }
 
-      // Store JWT in httpOnly cookie via API call (server-side)
-      // For now, store in localStorage as fallback
+      // Store JWT in localStorage
       if (typeof window !== 'undefined') {
         localStorage.setItem('auth_token', token);
+        console.log('💾 Token stored in localStorage');
       }
 
       setMessage('Login successful! Redirecting...');

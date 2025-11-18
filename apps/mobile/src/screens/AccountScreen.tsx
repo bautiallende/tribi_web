@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-  Clipboard,
+    ActivityIndicator,
+    Alert,
+    Clipboard,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { ordersAPI, clearToken, esimAPI } from '../api/client';
+import { clearToken, esimAPI, ordersAPI } from '../api/client';
 
 interface PlanSnapshot {
   id?: number;
@@ -60,14 +60,22 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     try {
       if (!isRefresh) setIsLoading(true);
       setError('');
+      
+      console.log('📦 Mobile: Fetching orders and eSIMs...');
       const [ordersData, esimsData] = await Promise.all([
         ordersAPI.getMyOrders(),
         esimAPI.listMine(),
       ]);
 
+      console.log(`✅ Mobile: Loaded ${ordersData.length} orders`);
+      console.log('📍 Mobile: Sample order:', ordersData[0]);
+      console.log(`✅ Mobile: Loaded ${esimsData.length} eSIMs`);
+      console.log('📱 Mobile: Sample eSIM:', esimsData[0]);
+
       const mappedEsims = esimsData.reduce<Record<number, EsimProfile>>((acc, esim) => {
         if (typeof esim.order_id === 'number') {
           acc[esim.order_id] = esim;
+          console.log(`🔗 Mobile: Mapped eSIM ${esim.id} to order ${esim.order_id}`);
         }
         return acc;
       }, {});
@@ -75,6 +83,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       setOrders(ordersData);
       setEsims(mappedEsims);
     } catch (error) {
+      console.error('❌ Mobile: Failed to fetch orders:', error);
       setError(error instanceof Error ? error.message : 'Failed to load orders');
     } finally {
       setIsLoading(false);

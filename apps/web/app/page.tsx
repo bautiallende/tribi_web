@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { CountryPicker } from '@/components/CountryPicker'
 import { Badge } from '@tribi/ui'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 
 interface Country {
@@ -87,7 +87,13 @@ export default function Home() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <button className="group px-8 py-3 md:px-10 md:py-4 bg-gradient-to-r from-primary-600 via-primary-600 to-primary-700 hover:from-primary-700 hover:via-primary-600 hover:to-primary-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 relative overflow-hidden">
+              <button 
+                onClick={() => {
+                  console.log('📱 Get Started clicked - scrolling to country picker');
+                  document.querySelector('.country-picker-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                className="group px-8 py-3 md:px-10 md:py-4 bg-gradient-to-r from-primary-600 via-primary-600 to-primary-700 hover:from-primary-700 hover:via-primary-600 hover:to-primary-600 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 relative overflow-hidden"
+              >
                 <span className="relative z-10 flex items-center justify-center gap-2">
                   Get Started Now
                   <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,7 +115,7 @@ export default function Home() {
           </div>
 
           {/* Country Picker Card */}
-                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-8 border-2 border-gray-300 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300">
+          <div className="country-picker-card bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-8 border-2 border-gray-300 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Where are you traveling?</h2>
             </div>
@@ -217,7 +223,16 @@ export default function Home() {
           <p className="text-lg text-gray-700 dark:text-gray-300 max-w-2xl mx-auto mb-8">
             Join thousands of travelers who&apos;ve already ditched expensive roaming plans
           </p>
-          <button className="px-10 py-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95">
+          <button 
+            onClick={() => {
+              console.log('📱 Explore Plans clicked - scrolling to country picker');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setTimeout(() => {
+                document.querySelector('.country-picker-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 500);
+            }}
+            className="px-10 py-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
+          >
             Explore Plans Now
           </button>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl } from "@/lib/apiConfig";
 import { ToastProvider } from "@tribi/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -18,51 +19,75 @@ export default function AdminLayout({
       try {
         console.log("🔐 Admin layout: Checking authentication...");
         
-        // Check if user is authenticated
-        const response = await fetch("http://localhost:8000/api/auth/me", {
+        // Get token from localStorage
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        
+        if (!token) {
+          console.log("❌ No auth token found, redirecting to /auth");
+          router.push("/auth?redirect=/admin");
+          return;
+        }
+
+        // Check if user is authenticated and get user details
+        const authUrl = apiUrl('/api/auth/me');
+        console.log("🔗 Checking auth at:", authUrl);
+        
+        const response = await fetch(authUrl, {
           credentials: "include",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
         });
 
         console.log(`📥 Admin auth response: ${response.status}`);
 
         if (!response.ok) {
-          console.log("❌ Not authenticated, redirecting to login");
-          // Not authenticated - redirect to login
-          router.push("/auth/login?redirect=/admin");
+          console.log("❌ Not authenticated, redirecting to /auth");
+          // Clear invalid token
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('auth_token');
+          }
+          router.push("/auth?redirect=/admin");
           return;
         }
 
         const user = await response.json();
         console.log("✅ User authenticated:", user.email);
 
-        // Check if user is admin by trying to access admin endpoint
-        console.log("🔍 Checking admin privileges...");
-        const adminCheckResponse = await fetch(
-          "http://localhost:8000/admin/countries?page=1&page_size=1",
-          {
-            credentials: "include",
-          }
-        );
+        // Check if user is admin
+        // Backend admin check: user email must be in ADMIN_EMAILS list
+        console.log("🔍 Checking admin privileges for:", user.email);
+        
+        // Try to access admin endpoint to verify admin status
+        const adminCheckUrl = apiUrl('/admin/countries?page=1&page_size=1');
+        console.log("🔗 Admin check endpoint:", adminCheckUrl);
+        
+        const adminCheckResponse = await fetch(adminCheckUrl, {
+          credentials: "include",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
 
         console.log(`📥 Admin check response: ${adminCheckResponse.status}`);
 
         if (adminCheckResponse.status === 403) {
-          console.log("❌ User is not admin");
-          // Authenticated but not admin
-          setError("Access denied. Admin privileges required.");
+          console.log(`❌ User ${user.email} is not admin - 403 Forbidden`);
+          console.log("💡 To grant admin access, add this email to ADMIN_EMAILS in backend .env");
+          setError(`Access denied. User ${user.email} does not have admin privileges.`);
           setIsAuthorized(false);
           return;
         }
 
         if (!adminCheckResponse.ok) {
-          console.log("❌ Failed to verify admin access");
+          console.log("❌ Failed to verify admin access:", adminCheckResponse.status);
           setError("Failed to verify admin access.");
           setIsAuthorized(false);
           return;
         }
 
         // User is admin
-        console.log("✅ Admin access confirmed");
+        console.log("✅ Admin access confirmed for:", user.email);
         setIsAuthorized(true);
       } catch (err) {
         console.error("❌ Admin auth check error:", err);
@@ -120,7 +145,7 @@ export default function AdminLayout({
               Go Home
             </button>
             <button
-              onClick={() => router.push("/auth/login")}
+              onClick={() => router.push("/auth")}
               className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
             >
               Login

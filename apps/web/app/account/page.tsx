@@ -6,11 +6,10 @@
 
 'use client';
 
+import { apiUrl } from '@/lib/apiConfig';
 import { Button, Card } from '@tribi/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
 
 interface User {
   id: number;
@@ -65,7 +64,7 @@ export default function AccountPage() {
     async (token: string) => {
       try {
         console.log('👤 Fetching user profile...');
-        const response = await fetch(`${API_BASE}/api/auth/me`, {
+        const response = await fetch(apiUrl('/api/auth/me'), {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -91,7 +90,7 @@ export default function AccountPage() {
   const fetchOrders = useCallback(async (token: string) => {
     try {
       console.log('📦 Fetching orders...');
-      const response = await fetch(`${API_BASE}/api/orders/mine`, {
+      const response = await fetch(apiUrl('/api/orders/mine'), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -113,7 +112,7 @@ export default function AccountPage() {
   const fetchEsims = useCallback(async (token: string) => {
     try {
       console.log('📶 Fetching eSIMs...');
-      const response = await fetch(`${API_BASE}/api/esims/mine`, {
+      const response = await fetch(apiUrl('/api/esims/mine'), {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -124,6 +123,7 @@ export default function AccountPage() {
       }
 
       const data: EsimProfile[] = await response.json();
+      console.log(`✅ eSIMs loaded: ${data.length} eSIMs`);
       const mapped = data.reduce<Record<number, EsimProfile>>((acc, esim) => {
         if (typeof esim.order_id === 'number') {
           acc[esim.order_id] = esim;
