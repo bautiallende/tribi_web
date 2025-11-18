@@ -2,11 +2,12 @@
 
 from typing import cast
 
-from app.main import app
-from app.models.auth_models import AuthCode, EsimStatus, Order
 from fastapi.testclient import TestClient
 
+from app.main import app
+from app.models.auth_models import AuthCode, Order, EsimStatus
 from .conftest import TestingSessionLocal
+
 
 client = TestClient(app)
 

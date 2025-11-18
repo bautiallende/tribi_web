@@ -1,9 +1,9 @@
 'use client'
 
-import { CountryPicker } from '@/components/CountryPicker'
-import { Badge } from '@tribi/ui'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { CountryPicker } from '@/components/CountryPicker'
+import { Badge } from '@tribi/ui'
 
 
 interface Country {

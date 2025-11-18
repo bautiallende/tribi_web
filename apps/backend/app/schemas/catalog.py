@@ -1,6 +1,5 @@
-from decimal import Decimal
-
 from pydantic import BaseModel, ConfigDict, field_serializer
+from decimal import Decimal
 
 
 class CountryBase(BaseModel):

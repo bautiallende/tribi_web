@@ -2,11 +2,11 @@
 
 from typing import cast
 
+from fastapi.testclient import TestClient
+
 from app.main import app
 from app.models.auth_models import AuthCode, Order, Payment, PaymentStatus
 from app.services.payment_providers import MockPaymentProvider, get_payment_provider
-from fastapi.testclient import TestClient
-
 from .conftest import TestingSessionLocal
 
 client = TestClient(app)

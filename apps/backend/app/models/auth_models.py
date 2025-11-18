@@ -1,21 +1,19 @@
 import datetime as dt
-import enum
-
 from sqlalchemy import (
-    JSON,
-    BigInteger,
-    Boolean,
     Column,
-    DateTime,
-    Enum,
-    ForeignKey,
     Integer,
     String,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    Enum,
+    BigInteger,
+    JSON,
     Text,
 )
 from sqlalchemy.orm import relationship
-
 from .catalog import Base
+import enum
 
 
 def utcnow() -> dt.datetime:

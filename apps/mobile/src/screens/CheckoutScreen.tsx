@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Clipboard,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+  Clipboard,
+  Platform,
 } from 'react-native';
-import { esimAPI, ordersAPI, paymentsAPI } from '../api/client';
+import { ordersAPI, paymentsAPI, esimAPI } from '../api/client';
 
 interface PlanSnapshot {
   id?: number;

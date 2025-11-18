@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
-import { getToken, ordersAPI, plansAPI } from '../api/client';
+import { plansAPI, ordersAPI, getToken } from '../api/client';
 
 interface Plan {
   id: number;

@@ -7,11 +7,13 @@ from contextlib import contextmanager
 from decimal import Decimal
 from typing import cast
 
+from fastapi.testclient import TestClient
+
 from app.db.session import get_db
 from app.main import app
 from app.models import Carrier, Country, Plan
 from app.models.auth_models import AuthCode, EsimProfile, EsimStatus
-from fastapi.testclient import TestClient
+
 
 client = TestClient(app)
 

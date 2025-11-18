@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useState, useEffect, useRef } from 'react'
-import { Input, Badge } from '@tribi/ui'
+import { Input } from '@tribi/ui'
+import { useEffect, useRef, useState } from 'react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE
   ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/$/, '')

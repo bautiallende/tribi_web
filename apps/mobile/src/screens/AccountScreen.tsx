@@ -1,16 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Clipboard,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  Clipboard,
 } from 'react-native';
-import { clearToken, esimAPI, ordersAPI } from '../api/client';
+import { ordersAPI, clearToken, esimAPI } from '../api/client';
 
 interface PlanSnapshot {
   id?: number;

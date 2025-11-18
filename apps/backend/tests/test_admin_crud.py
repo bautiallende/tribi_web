@@ -1,8 +1,9 @@
 import pytest
+from fastapi.testclient import TestClient
+
 from app.core.config import settings
 from app.main import app
 from app.models import Carrier, Country, Plan, User
-from fastapi.testclient import TestClient
 
 from .conftest import TestingSessionLocal
 

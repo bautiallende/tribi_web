@@ -1,21 +1,21 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React, { useState, useEffect } from 'react';
 import {
-    LinkingOptions,
-    NavigationContainer,
-    NavigatorScreenParams,
+  NavigationContainer,
+  LinkingOptions,
+  NavigatorScreenParams,
 } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, LogBox, StyleSheet, Text, View } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform, LogBox } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getToken } from './src/api/client';
 
 // Import screens
-import AccountScreen from './src/screens/AccountScreen';
-import AuthCodeScreen from './src/screens/AuthCodeScreen';
 import AuthEmailScreen from './src/screens/AuthEmailScreen';
+import AuthCodeScreen from './src/screens/AuthCodeScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
+import AccountScreen from './src/screens/AccountScreen';
 import CountriesScreen from './src/screens/CountriesScreen';
 import PlansScreen from './src/screens/PlansScreen';
 

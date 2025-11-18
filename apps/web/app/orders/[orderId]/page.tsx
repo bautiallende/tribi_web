@@ -1,17 +1,17 @@
 "use client"
 
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-    Skeleton,
-} from "@tribi/ui"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+	CardDescription,
+	CardFooter,
+	Skeleton,
+} from "@tribi/ui"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"
 

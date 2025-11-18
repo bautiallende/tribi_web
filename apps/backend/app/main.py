@@ -9,9 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api import catalog_router
 from .api.admin import router as admin_router
 from .api.auth import router as auth_router
-from .api.device import router as device_router
 from .api.orders import esims_router, payments_router
 from .api.orders import router as orders_router
+from .api.device import router as device_router
 from .core.config import settings
 
 load_dotenv()
