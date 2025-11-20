@@ -1,19 +1,21 @@
 import datetime as dt
+import enum
+
 from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
     Column,
+    DateTime,
+    Enum,
+    ForeignKey,
     Integer,
     String,
-    DateTime,
-    Boolean,
-    ForeignKey,
-    Enum,
-    BigInteger,
-    JSON,
     Text,
 )
 from sqlalchemy.orm import relationship
+
 from .catalog import Base
-import enum
 
 
 def utcnow() -> dt.datetime:
@@ -42,9 +44,18 @@ class OrderStatus(enum.Enum):
 class EsimStatus(enum.Enum):
     DRAFT = "draft"
     PENDING_ACTIVATION = "pending_activation"
+    RESERVED = "reserved"
+    ASSIGNED = "assigned"
     ACTIVE = "active"
     FAILED = "failed"
     EXPIRED = "expired"
+
+
+class EsimInventoryStatus(enum.Enum):
+    AVAILABLE = "available"
+    RESERVED = "reserved"
+    ASSIGNED = "assigned"
+    RETIRED = "retired"
 
 
 class User(Base):
@@ -110,11 +121,17 @@ class EsimProfile(Base):
     country_id = Column(Integer, ForeignKey("countries.id"), nullable=True, index=True)
     carrier_id = Column(Integer, ForeignKey("carriers.id"), nullable=True, index=True)
     plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True, index=True)
+    inventory_item_id = Column(
+        Integer, ForeignKey("esim_inventory.id"), nullable=True, index=True
+    )
     activation_code = Column(String(128), nullable=True)
     iccid = Column(String(64), nullable=True)
     status = Column(
         Enum(EsimStatus), default=EsimStatus.PENDING_ACTIVATION, nullable=False
     )
+    provider_reference = Column(String(128), nullable=True)
+    provisioned_at = Column(DateTime, nullable=True)
+    provider_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=utcnow)
     qr_payload = Column(Text, nullable=True)
     instructions = Column(Text, nullable=True)
@@ -124,6 +141,42 @@ class EsimProfile(Base):
     country = relationship("Country")
     carrier = relationship("Carrier")
     plan = relationship("Plan")
+    inventory_item = relationship(
+        "EsimInventory", back_populates="profiles", foreign_keys=[inventory_item_id]
+    )
+
+
+class EsimInventory(Base):
+    __tablename__ = "esim_inventory"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("plans.id"), nullable=True, index=True)
+    carrier_id = Column(Integer, ForeignKey("carriers.id"), nullable=True, index=True)
+    country_id = Column(Integer, ForeignKey("countries.id"), nullable=True, index=True)
+    activation_code = Column(String(128), nullable=True)
+    iccid = Column(String(64), nullable=True)
+    qr_payload = Column(Text, nullable=True)
+    instructions = Column(Text, nullable=True)
+    status = Column(
+        Enum(
+            EsimInventoryStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=EsimInventoryStatus.AVAILABLE,
+        nullable=False,
+    )
+    extra_metadata = Column("metadata", JSON, nullable=True)
+    provider_reference = Column(String(128), nullable=True)
+    provider_payload = Column(JSON, nullable=True)
+    reserved_at = Column(DateTime, nullable=True)
+    assigned_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    plan = relationship("Plan")
+    country = relationship("Country")
+    carrier = relationship("Carrier")
+    profiles = relationship("EsimProfile", back_populates="inventory_item")
 
 
 class Payment(Base):

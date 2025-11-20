@@ -31,6 +31,61 @@ Before testing, ensure:
 
 ---
 
+## BACKEND API TESTS – INVENTORY & PROVIDER FLOW
+
+### Test A: Inventory-First eSIM Activation
+
+1. **Seed inventory row** (psql/MySQL shell):
+
+   ```sql
+   INSERT INTO esim_inventory (plan_id, activation_code, iccid, qr_payload, instructions, status)
+   VALUES (123, 'INV-SMOKE-001', '89010000000000000123', 'LPA:1$INV-SMOKE-001', 'Scan QR to install', 'AVAILABLE');
+   ```
+
+   Replace `plan_id` with the plan you will purchase.
+
+2. **Authenticate and create a paid order** using the backend tests helper or curl:
+
+   ```bash
+   # Request + verify OTP to obtain token (reuse web auth steps)
+   curl -H "Authorization: Bearer $TOKEN" -d '{"plan_id":123,"currency":"USD"}' http://localhost:8000/api/orders
+   curl -H "Authorization: Bearer $TOKEN" -d '{"order_id":<ORDER_ID>,"provider":"MOCK"}' http://localhost:8000/api/payments/create
+   curl -X POST http://localhost:8000/api/payments/webhook -d '{"provider":"MOCK","intent_id":"<INTENT_ID>","status":"succeeded"}'
+   ```
+
+3. **Activate the eSIM**:
+
+   ```bash
+   curl -H "Authorization: Bearer $TOKEN" -d '{"order_id":<ORDER_ID>}' http://localhost:8000/api/esims/activate | jq
+   ```
+
+   - **Expected:**
+     - Response status `200`.
+     - `inventory_item_id` matches the seeded row.
+     - `status` becomes `active` and `activation_code` equals `INV-SMOKE-001`.
+   - **DB check:** `SELECT status, assigned_at FROM esim_inventory WHERE id=<inventory_id>;` should return `ASSIGNED` with `assigned_at` populated.
+
+4. **Idempotency check:** repeat the `activate` call. Response should be `200` with identical payload (same activation code, timestamps unchanged).
+
+### Test B: Provider Fallback (No Inventory)
+
+1. Ensure no AVAILABLE inventory for the target plan/country.
+2. Repeat order creation and payment steps above.
+3. Activate the eSIM. Expected results:
+   - Response still `200` with generated activation code/ICCID.
+   - Database now has a freshly created `esim_inventory` row linked to the profile (`inventory_item_id` not null, status `ASSIGNED`).
+4. Inspect backend logs for `ConnectedYou dry-run payload` (when `ESIM_PROVIDER=CONNECTED_YOU`) or `LocalEsimProvider` messages.
+
+### Test C: Provider Failure Handling
+
+1. Temporarily patch the provider (python shell or tests) to raise `EsimProvisioningError` or set `ESIM_PROVIDER=CONNECTED_YOU` with invalid credentials.
+2. Trigger activation with no inventory available.
+3. **Expected:** HTTP `502`, JSON detail "Unable to provision eSIM". Profile remains in `pending_activation`, `inventory_item_id` stays null.
+
+Document results (success/failure, inventory IDs) in the QA log for traceability.
+
+---
+
 ## WEB APPLICATION TESTS
 
 ### Setup Web App

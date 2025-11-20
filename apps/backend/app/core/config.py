@@ -39,6 +39,21 @@ class Settings(BaseSettings):
 
     # Payments
     PAYMENT_PROVIDER: str = "MOCK"
+    DEFAULT_CURRENCY: str = "USD"
+    ESIM_PROVIDER: str = "LOCAL"
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_PUBLISHABLE_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+    STRIPE_ACCOUNT_ID: str | None = None
+    STRIPE_AUTO_PAYMENT_METHODS: bool = True
+    STRIPE_PAYMENT_METHOD_TYPES: list[str] | None = None
+
+    # ConnectedYou (eSIM provider)
+    CONNECTED_YOU_BASE_URL: str = "https://sandbox.api.connectedyou.com"
+    CONNECTED_YOU_API_KEY: str | None = None
+    CONNECTED_YOU_PARTNER_ID: str | None = None
+    CONNECTED_YOU_TIMEOUT_SECONDS: int = 15
+    CONNECTED_YOU_DRY_RUN: bool = True
 
     # Admin Access
     ADMIN_EMAILS: str = ""  # Comma-separated list of admin emails

@@ -3,11 +3,17 @@
 ## Overview
 
 The admin panel provides a comprehensive interface for managing the core data of the eSIM marketplace:
+
 - **Countries**: Manage available countries with ISO codes
-- **Carriers**: Manage mobile carriers/operators  
+- **Carriers**: Manage mobile carriers/operators
 - **Plans**: Manage eSIM data plans with pricing and specifications
+- **Orders**: Audit lifecycle, payments, and associated eSIM provisioning
+- **Payments**: Reconcile provider activity and investigate intent status
+- **eSIM Profiles**: Track provisioning status, assignments, and user linkage
+- **Inventory**: Inspect physical eSIM stock, low-stock alerts, and CSV imports
 
 All admin pages include modern UX features:
+
 - ✅ Debounced search (300ms)
 - ✅ Column sorting (ascending/descending)
 - ✅ Pagination (20 items per page)
@@ -22,11 +28,13 @@ All admin pages include modern UX features:
 Access is restricted to users with verified email addresses listed in the `ADMIN_EMAILS` environment variable (comma-separated list).
 
 Example:
+
 ```bash
 ADMIN_EMAILS=admin@tribi.com,manager@tribi.com
 ```
 
 Users must:
+
 1. Sign in via `/auth/signin`
 2. Complete email verification
 3. Have their email in the whitelist
@@ -61,7 +69,7 @@ Users must:
 
 - **List View**: Paginated table with search, filters, and sorting
 - **Search**: Real-time search by plan name
-- **Filters**: 
+- **Filters**:
   - Country dropdown (filter by country_id)
   - Carrier dropdown (filter by carrier_id)
 - **Sorting**: Click headers to sort by Name, Price, Duration, or Data (asc/desc)
@@ -79,6 +87,54 @@ Users must:
   - Duration (days): Positive integer
   - Price (USD): Positive decimal
 
+### Orders Management (`/admin/orders`)
+
+- **List View**: Shows order state, amount, customer, plan snapshot, latest payment, and eSIM assignment
+- **Filters**:
+  - Order status (`created`, `paid`, `failed`, `refunded`)
+  - Latest payment status (`succeeded`, `requires_action`, `failed`)
+  - User query (email or name substring match)
+  - Plan ID (exact match)
+  - Date range (`start_date`, `end_date` in ISO format)
+- **Sorting**: Sort by creation time, amount, or status (asc/desc)
+- **Search**: Debounced search input targeting `user_q`
+- **Details Drawer**: Each row links to `/admin/orders/{id}` for full payload (user, plan snapshot, payments, eSIM)
+- **Pagination**: 20 orders per page with total count metadata
+
+### Payments Monitoring (`/admin/payments`)
+
+- **List View**: Provider/status focused ledger with amount, linked order, and intent metadata
+- **Filters**:
+  - Provider (`stripe`, `mercado_pago`, `mock`, etc.)
+  - Payment status (`succeeded`, `requires_action`, `failed`)
+  - Order ID (exact match) and date range for investigations
+- **Search**: Debounced intent ID search via `intent_q`
+- **Sorting**: Toggle newest/oldest by `created_at`
+- **Badges**: Color-coded payment status + provider name for quick scanning
+- **Pagination**: 20 payments per page, API returns total pages/items for reconciliation work
+
+### eSIM Profiles (`/admin/esims`)
+
+- **List View**: Shows eSIM record, user, order, plan, inventory linkage, and created timestamp
+- **Filters**:
+  - eSIM status (`draft`, `pending_activation`, `reserved`, `assigned`, `active`, `failed`, `expired`)
+  - Inventory status of linked stock (`available`, `reserved`, `assigned`, `retired`)
+  - Order ID and plan ID filters (exact match)
+  - User query for email/name fuzzy search
+- **Search**: Debounced `user_q` input plus numeric input for order filtering
+- **Inventory Context**: Displays activation code, ICCID, inventory item id, and link status
+- **Pagination**: 20 profiles per page with skeleton loaders during fetches
+
+### Inventory Management (`/admin/inventory`)
+
+- **Status Cards**: Aggregated counts for available, reserved, assigned, and retired items
+- **Low Stock Alerts**: Configurable `low_stock_threshold` input with live stats from `/admin/inventory/stats`
+- **Filters**:
+  - Inventory status, plan ID, carrier ID, country ID, and free-text search for activation code/ICCID
+- **Metadata View**: Shows provider reference, reservation/assignment timestamps, and updated audit trail
+- **Pagination**: 20 items per page; supports up to 200 via API parameter adjustment
+- **CSV Import**: Admins can upload inventory data to `/admin/inventory/import` for bulk creation/updates (documented below)
+
 ## API Endpoints
 
 All endpoints require authentication and admin privileges.
@@ -86,11 +142,13 @@ All endpoints require authentication and admin privileges.
 ### Countries Endpoints
 
 #### List Countries
+
 ```http
 GET /admin/countries?q=spain&sort_by=name&sort_order=asc&page=1&page_size=20
 ```
 
 **Query Parameters**:
+
 - `q` (optional): Search query for name or ISO code
 - `sort_by` (optional): Sort field (`name` or `iso2`, default: `name`)
 - `sort_order` (optional): Sort direction (`asc` or `desc`, default: `asc`)
@@ -98,6 +156,7 @@ GET /admin/countries?q=spain&sort_by=name&sort_order=asc&page=1&page_size=20
 - `page_size` (optional): Items per page (default: 20, max: 100)
 
 **Response**:
+
 ```json
 {
   "countries": [
@@ -114,12 +173,14 @@ GET /admin/countries?q=spain&sort_by=name&sort_order=asc&page=1&page_size=20
 ```
 
 **Example**:
+
 ```bash
 curl -X GET "http://localhost:8000/admin/countries?q=united&sort_by=name&sort_order=asc" \
   --cookie "session=your_session_token"
 ```
 
 #### Create Country
+
 ```http
 POST /admin/countries
 Content-Type: application/json
@@ -131,6 +192,7 @@ Content-Type: application/json
 ```
 
 **Example**:
+
 ```bash
 curl -X POST "http://localhost:8000/admin/countries" \
   -H "Content-Type: application/json" \
@@ -139,6 +201,7 @@ curl -X POST "http://localhost:8000/admin/countries" \
 ```
 
 #### Update Country
+
 ```http
 PUT /admin/countries/{id}
 Content-Type: application/json
@@ -150,11 +213,13 @@ Content-Type: application/json
 ```
 
 #### Delete Country
+
 ```http
 DELETE /admin/countries/{id}
 ```
 
 **Example**:
+
 ```bash
 curl -X DELETE "http://localhost:8000/admin/countries/5" \
   --cookie "session=your_session_token"
@@ -163,11 +228,13 @@ curl -X DELETE "http://localhost:8000/admin/countries/5" \
 ### Carriers Endpoints
 
 #### List Carriers
+
 ```http
 GET /admin/carriers?q=vodafone&sort_by=name&sort_order=asc&page=1&page_size=20
 ```
 
 **Query Parameters**:
+
 - `q` (optional): Search query for carrier name
 - `sort_by` (optional): Sort field (`name` or `id`, default: `name`)
 - `sort_order` (optional): Sort direction (`asc` or `desc`, default: `asc`)
@@ -175,6 +242,7 @@ GET /admin/carriers?q=vodafone&sort_by=name&sort_order=asc&page=1&page_size=20
 - `page_size` (optional): Items per page (default: 20, max: 100)
 
 **Response**:
+
 ```json
 {
   "carriers": [
@@ -190,6 +258,7 @@ GET /admin/carriers?q=vodafone&sort_by=name&sort_order=asc&page=1&page_size=20
 ```
 
 #### Create Carrier
+
 ```http
 POST /admin/carriers
 Content-Type: application/json
@@ -200,6 +269,7 @@ Content-Type: application/json
 ```
 
 #### Update Carrier
+
 ```http
 PUT /admin/carriers/{id}
 Content-Type: application/json
@@ -210,6 +280,7 @@ Content-Type: application/json
 ```
 
 #### Delete Carrier
+
 ```http
 DELETE /admin/carriers/{id}
 ```
@@ -217,11 +288,13 @@ DELETE /admin/carriers/{id}
 ### Plans Endpoints
 
 #### List Plans
+
 ```http
 GET /admin/plans?q=unlimited&country_id=1&carrier_id=2&sort_by=price_usd&sort_order=asc&page=1&page_size=20
 ```
 
 **Query Parameters**:
+
 - `q` (optional): Search query for plan name
 - `country_id` (optional): Filter by country
 - `carrier_id` (optional): Filter by carrier
@@ -231,6 +304,7 @@ GET /admin/plans?q=unlimited&country_id=1&carrier_id=2&sort_by=price_usd&sort_or
 - `page_size` (optional): Items per page (default: 20, max: 100)
 
 **Response**:
+
 ```json
 {
   "plans": [
@@ -242,7 +316,7 @@ GET /admin/plans?q=unlimited&country_id=1&carrier_id=2&sort_by=price_usd&sort_or
       "data_gb": 10.0,
       "is_unlimited": false,
       "duration_days": 30,
-      "price_usd": 25.00,
+      "price_usd": 25.0,
       "description": "Perfect for tourists"
     }
   ],
@@ -253,6 +327,7 @@ GET /admin/plans?q=unlimited&country_id=1&carrier_id=2&sort_by=price_usd&sort_or
 ```
 
 #### Create Plan
+
 ```http
 POST /admin/plans
 Content-Type: application/json
@@ -270,6 +345,7 @@ Content-Type: application/json
 ```
 
 #### Update Plan
+
 ```http
 PUT /admin/plans/{id}
 Content-Type: application/json
@@ -281,11 +357,13 @@ Content-Type: application/json
 ```
 
 #### Delete Plan
+
 ```http
 DELETE /admin/plans/{id}
 ```
 
 #### Export Plans (CSV)
+
 ```http
 GET /admin/plans/export
 ```
@@ -293,6 +371,7 @@ GET /admin/plans/export
 Downloads a CSV file (`plans_export.csv`) containing all plans with the following columns:
 
 **Example**:
+
 ```bash
 curl -X GET "http://localhost:8000/admin/plans/export" \
   --cookie "session=your_session_token" \
@@ -302,6 +381,7 @@ curl -X GET "http://localhost:8000/admin/plans/export" \
 **Response**: CSV file download
 
 #### Import Plans (CSV)
+
 ```http
 POST /admin/plans/import
 Content-Type: multipart/form-data
@@ -312,6 +392,7 @@ file: <CSV file>
 Bulk creates or updates plans from a CSV file. Uses transaction safety (all-or-nothing).
 
 **Example**:
+
 ```bash
 curl -X POST "http://localhost:8000/admin/plans/import" \
   -F "file=@plans.csv" \
@@ -319,6 +400,7 @@ curl -X POST "http://localhost:8000/admin/plans/import" \
 ```
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -329,6 +411,7 @@ curl -X POST "http://localhost:8000/admin/plans/import" \
 ```
 
 Or on error:
+
 ```json
 {
   "success": false,
@@ -341,7 +424,177 @@ Or on error:
 }
 ```
 
-## CSV Import/Export Guide
+### Orders Endpoints
+
+#### List Orders
+
+```http
+GET /admin/orders?order_status=paid&payment_status=succeeded&user_q=john&plan_id=42&start_date=2024-01-01T00:00:00Z&end_date=2024-02-01T00:00:00Z&sort_by=amount&sort_order=desc&page=1&page_size=20
+```
+
+**Query Parameters**:
+
+- `order_status` (optional): `created`, `paid`, `failed`, `refunded`
+- `payment_status` (optional): Filters orders that have at least one payment in the given status (`succeeded`, `requires_action`, `failed`)
+- `user_q` (optional): Case-insensitive search against user email or name
+- `plan_id` (optional): Exact plan id match
+- `start_date` / `end_date` (optional): ISO 8601 timestamps to bound `created_at`
+- `sort_by` (optional): `created_at`, `amount`, or `status` (default `created_at`)
+- `sort_order` (optional): `asc` or `desc` (default `desc`)
+- Standard `page` / `page_size` pagination controls
+
+**Response (trimmed)**:
+
+```json
+{
+  "items": [
+    {
+      "id": 501,
+      "status": "paid",
+      "currency": "USD",
+      "amount_minor_units": 4500,
+      "created_at": "2024-01-22T18:41:12.331Z",
+      "plan_id": 42,
+      "plan_snapshot": {
+        "id": 42,
+        "name": "Spain 10GB - 30 Days"
+      },
+      "user": {
+        "id": 9,
+        "email": "john@example.com",
+        "name": "John Carter"
+      },
+      "payments": [
+        {
+          "id": 922,
+          "provider": "stripe",
+          "status": "succeeded",
+          "intent_id": "pi_123",
+          "created_at": "2024-01-22T18:41:30.102Z",
+          "order_amount_minor_units": 4500,
+          "order_currency": "USD"
+        }
+      ],
+      "esim_profile": {
+        "id": 301,
+        "status": "assigned",
+        "activation_code": "LPA:1$XYZ"
+      }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 1
+}
+```
+
+#### Retrieve Order Detail
+
+```http
+GET /admin/orders/{order_id}
+```
+
+Returns the same `AdminOrderRead` payload as the list endpoint but without pagination.
+
+### Payments Endpoints
+
+#### List Payments
+
+```http
+GET /admin/payments?provider=stripe&payment_status=requires_action&intent_q=pi_&order_id=501&start_date=2024-01-01T00:00:00Z&sort_order=desc&page=1
+```
+
+**Query Parameters**:
+
+- `provider` (optional): Match provider name (case-insensitive)
+- `payment_status` (optional): `succeeded`, `requires_action`, `failed`
+- `intent_q` (optional): Substring search across intent IDs
+- `order_id` (optional): Exact match
+- `start_date` / `end_date` (optional): ISO timestamps filter on `created_at`
+- `sort_order` (optional): `asc`/`desc` by creation time (default `desc`)
+- Standard pagination parameters
+
+**Response (trimmed)**:
+
+```json
+{
+  "items": [
+    {
+      "id": 922,
+      "order_id": 501,
+      "provider": "stripe",
+      "status": "requires_action",
+      "intent_id": "pi_123",
+      "created_at": "2024-01-22T18:41:30.102Z",
+      "order_amount_minor_units": 4500,
+      "order_currency": "USD"
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 1
+}
+```
+
+### eSIM Profiles Endpoints
+
+#### List eSIM Profiles
+
+```http
+GET /admin/esims?esim_status=assigned&inventory_status=available&order_id=501&user_q=john&page=1&page_size=20
+```
+
+**Query Parameters**:
+
+- `esim_status` (optional): Any value from the `EsimStatus` enum
+- `inventory_status` (optional): Filters by linked inventory state (`available`, `reserved`, `assigned`, `retired`)
+- `user_q` (optional): Search by user email or name
+- `order_id` / `plan_id` (optional): Exact matches
+- Standard pagination options
+
+**Response**: Returns paginated `AdminEsimProfileRead` objects including inventory item linkage, activation codes, and timestamps.
+
+### Inventory Endpoints
+
+#### List Inventory
+
+```http
+GET /admin/inventory?inventory_status=available&plan_id=42&carrier_id=7&country_id=5&q=LPA&page=1&page_size=50&sort_by=created_at&sort_order=desc
+```
+
+**Query Parameters**:
+
+- `inventory_status` (optional): `available`, `reserved`, `assigned`, `retired`
+- `plan_id`, `carrier_id`, `country_id` (optional): Exact matches
+- `q` (optional): Substring search across activation code or ICCID
+- `sort_by` (optional): `created_at`, `status`, `plan_id`
+- `sort_order` (optional): `asc`/`desc`
+- Pagination knobs (`page`, `page_size` up to 200)
+
+**Response**: Paginated list of `AdminInventoryRead` items (status, activation code, ICCID, provider reference, timestamps).
+
+#### Inventory Stats
+
+```http
+GET /admin/inventory/stats?low_stock_threshold=15
+```
+
+Returns total counts per `EsimInventoryStatus` and low-stock alerts for plans whose available supply is at or below the provided threshold.
+
+#### Import Inventory (CSV)
+
+```http
+POST /admin/inventory/import
+Content-Type: multipart/form-data
+
+file: <CSV file>
+```
+
+Each row updates or creates an inventory item matched by `activation_code`. Validation is strict—any error rolls back the transaction. Only the first 10 errors are returned to keep responses concise.
+
+## Plans CSV Import/Export Guide
 
 ### Export Format
 
@@ -358,6 +611,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 To import plans, create a CSV file with the same structure:
 
 **Column Descriptions**:
+
 - `id` (optional): If provided, updates existing plan. If omitted or empty, creates new plan.
 - `name` (required): Plan display name
 - `country_id` (required): Must match an existing country ID in the database
@@ -369,6 +623,7 @@ To import plans, create a CSV file with the same structure:
 - `description` (optional): Detailed plan description
 
 **Example Import File** (`plans_import.csv`):
+
 ```csv
 id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,description
 ,New Plan 5GB,1,2,5.0,false,15,12.50,Starter package
@@ -379,10 +634,12 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 ### Import Rules
 
 1. **Create vs Update**:
+
    - Empty or omitted `id` → Creates new plan
    - Existing `id` → Updates plan with that ID
 
 2. **Validation**:
+
    - All required fields must be present
    - `country_id` must exist in countries table
    - `carrier_id` must exist in carriers table
@@ -391,6 +648,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
    - `data_gb`, `duration_days`, `price_usd` must be positive
 
 3. **Transaction Safety**:
+
    - All rows are validated before any changes
    - If ANY row has errors, NO changes are applied (rollback)
    - Database remains unchanged if import fails
@@ -404,18 +662,21 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 ### Import Workflow
 
 1. **Export existing data** (optional backup):
+
    ```bash
    # Click "📥 Export CSV" button in Plans admin
    # Or use API: GET /admin/plans/export
    ```
 
 2. **Prepare CSV file**:
+
    - Use exported CSV as template
    - Add new rows (omit `id` column or leave empty)
    - Modify existing rows (include `id` to update)
    - Validate country_id and carrier_id match your database
 
 3. **Import file**:
+
    - Click file input in Plans admin
    - Select your CSV file
    - Wait for validation and processing
@@ -426,11 +687,47 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
    - Fix issues in CSV file
    - Re-import corrected file
 
+## Inventory CSV Import Guide
+
+Use this guide when seeding stock via `/admin/inventory/import`.
+
+### Expected Columns
+
+```csv
+activation_code,plan_id,carrier_id,country_id,status,iccid,qr_payload,instructions,provider_reference
+```
+
+- `activation_code` (required): Unique identifier; existing codes are updated, missing values are rejected
+- `plan_id` / `carrier_id` / `country_id` (optional): Numeric references to related entities
+- `status` (optional): Defaults to `available`; accepts any `EsimInventoryStatus` enum value
+- `iccid`, `qr_payload`, `instructions`, `provider_reference` (optional): Text metadata stored verbatim
+
+### Validation Rules
+
+1. All rows are wrapped in a single transaction; any error rolls back the file.
+2. Enum parsing is case-insensitive but must map to valid statuses (`available`, `reserved`, `assigned`, `retired`).
+3. Numeric fields must be integers; invalid strings raise `invalid value` errors with the row number.
+4. Up to 10 error strings are returned to keep responses concise.
+
+### Sample Response
+
+```json
+{
+  "success": true,
+  "created": 25,
+  "updated": 4,
+  "errors": []
+}
+```
+
+If validation fails, `success` becomes `false`, counts are zeroed, and `errors` contains messages such as `"Row 4: activation_code is required"`.
+
 ## Common Workflows
 
 ### Adding a New Country, Carrier, and Plan
 
 1. **Add Country**:
+
    - Navigate to `/admin/countries`
    - Click "Create Country"
    - Enter ISO2 code (e.g., "IT")
@@ -439,6 +736,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
    - Note the country_id from the table
 
 2. **Add Carrier**:
+
    - Navigate to `/admin/carriers`
    - Click "Create Carrier"
    - Enter name (e.g., "TIM")
@@ -458,6 +756,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Scenario**: You have 100 new plans to add from a partner carrier.
 
 1. **Prepare data**:
+
    - Export existing plans as CSV (backup)
    - Open in spreadsheet software
    - Add new rows with plan details
@@ -465,6 +764,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
    - Leave `id` column empty for new plans
 
 2. **Validate data**:
+
    - Check all required fields are present
    - Verify country_id values exist in countries table
    - Verify carrier_id values exist in carriers table
@@ -472,6 +772,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
    - Ensure is_unlimited is "true" or "false"
 
 3. **Import**:
+
    - Navigate to `/admin/plans`
    - Click file input
    - Select your CSV file
@@ -488,11 +789,13 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Scenario**: Increase prices for all Spain plans by 10%.
 
 1. **Export current data**:
+
    - Navigate to `/admin/plans`
    - Filter by Spain (country_id)
    - Click "📥 Export CSV"
 
 2. **Modify prices**:
+
    - Open CSV in spreadsheet
    - Update `price_usd` column (multiply by 1.1)
    - Keep `id` column intact (for updates)
@@ -507,16 +810,19 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 ## Limits and Constraints
 
 ### Pagination Limits
+
 - Default page size: 20 items
 - Maximum page size: 100 items
 - Frontend enforces 20 items per page for consistency
 
 ### Search and Filtering
+
 - Search is case-insensitive
 - Search debounce: 300ms (prevents excessive API calls)
 - Multiple filters can be combined (search + country + carrier)
 
 ### Field Validation Limits
+
 - Country ISO2: Exactly 2 uppercase letters
 - Country Name: 2-200 characters
 - Carrier Name: 2-100 characters
@@ -527,12 +833,14 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 - Plan Description: 0-1000 characters (optional)
 
 ### CSV Import Limits
+
 - Maximum file size: 10MB (configurable in backend)
 - Recommended: Import in batches of 500 rows or less
 - Transaction timeout: 30 seconds
 - Error reporting: Up to 10 errors returned (to prevent huge responses)
 
 ### Rate Limiting
+
 - Admin endpoints: 100 requests per minute per IP
 - CSV export: 10 exports per minute per user
 - CSV import: 5 imports per minute per user
@@ -544,11 +852,13 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Symptom**: Cannot access `/admin/*` routes, see "Access Denied" message.
 
 **Causes**:
+
 1. User email not in `ADMIN_EMAILS` environment variable
 2. Email not verified
 3. Session expired
 
 **Solutions**:
+
 1. Verify `ADMIN_EMAILS` contains your email address
 2. Check email for verification link and complete verification
 3. Sign out and sign in again to refresh session
@@ -559,11 +869,13 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Symptom**: Search input doesn't filter results.
 
 **Causes**:
+
 1. Debounce delay (300ms) - still typing
 2. Network error preventing API call
 3. Backend search logic issue
 
 **Solutions**:
+
 1. Wait 300ms after typing stops
 2. Check browser console for network errors
 3. Verify backend is running and accessible
@@ -576,18 +888,22 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Common Errors**:
 
 1. **"Missing required field: name"**
+
    - Ensure all required columns are present
    - Check for empty cells in required columns
 
 2. **"Invalid country_id: 999"**
+
    - Verify country_id exists in countries table
    - Export countries list to get valid IDs
 
 3. **"Invalid carrier_id: 888"**
+
    - Verify carrier_id exists in carriers table
    - Export carriers list to get valid IDs
 
 4. **"Invalid data type for price_usd"**
+
    - Ensure prices are formatted as decimals (25.00, not "$25")
    - Remove currency symbols and commas
 
@@ -595,6 +911,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
    - Use lowercase "true" or "false" (not "yes/no" or "1/0")
 
 **Solutions**:
+
 1. Download export CSV as template
 2. Validate data in spreadsheet before import
 3. Import small batches first (10-20 rows) to test
@@ -606,11 +923,13 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Symptom**: Clicking column headers doesn't sort data.
 
 **Causes**:
+
 1. Column is not sortable (check for ↕️ icon)
 2. Network error during re-fetch
 3. Backend sorting parameter issue
 
 **Solutions**:
+
 1. Verify column has sort icon (↕️)
 2. Check browser console for errors
 3. Test API directly with `?sort_by=name&sort_order=asc`
@@ -620,11 +939,13 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 **Symptom**: No success/error messages after actions.
 
 **Causes**:
+
 1. ToastProvider not wrapping component
 2. JavaScript error preventing toast display
 3. Toast hidden behind other elements (z-index issue)
 
 **Solutions**:
+
 1. Verify `<ToastProvider>` in admin layout
 2. Check browser console for React errors
 3. Inspect element - toast should have `z-50` class
@@ -632,29 +953,34 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 ## Security Considerations
 
 ### Access Control
+
 - All admin routes require authentication
 - Email verification required
 - Whitelist-based access (`ADMIN_EMAILS`)
 - Session-based authentication with secure cookies
 
 ### Data Validation
+
 - All inputs validated on frontend and backend
 - SQL injection prevention via ORM (SQLAlchemy)
 - XSS prevention via React (auto-escaping)
 - CSRF protection via SameSite cookies
 
 ### Audit Logging
-- *(Not yet implemented)*
+
+- _(Not yet implemented)_
 - Future: Log all admin actions (create, update, delete)
 - Future: Track who performed each action and when
 - Future: Store IP addresses for security audits
 
 ### Rate Limiting
+
 - Protects against abuse and DoS attacks
 - Per-IP and per-user limits
 - Stricter limits on expensive operations (CSV import/export)
 
 ### File Upload Security
+
 - CSV imports: Max 10MB file size
 - File type validation (must be text/csv)
 - Content validation before processing
@@ -676,6 +1002,7 @@ id,name,country_id,carrier_id,data_gb,is_unlimited,duration_days,price_usd,descr
 ## Support
 
 For issues or questions:
+
 1. Check this documentation first
 2. Review API examples above
 3. Check backend logs for detailed errors

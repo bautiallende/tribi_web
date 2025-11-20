@@ -6,8 +6,8 @@ export default function AdminDashboard() {
   return (
     <div>
       <h2 className="mb-8 text-3xl font-bold text-gray-900">Dashboard</h2>
-      
-      <div className="grid gap-6 md:grid-cols-3">
+
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {/* Countries Card */}
         <Link
           href="/admin/countries"
@@ -29,9 +29,7 @@ export default function AdminDashboard() {
               />
             </svg>
           </div>
-          <p className="text-gray-600">
-            Manage countries and their ISO2 codes
-          </p>
+          <p className="text-gray-600">Manage countries and their ISO2 codes</p>
           <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
             Manage
             <svg
@@ -71,9 +69,7 @@ export default function AdminDashboard() {
               />
             </svg>
           </div>
-          <p className="text-gray-600">
-            Manage mobile network carriers
-          </p>
+          <p className="text-gray-600">Manage mobile network carriers</p>
           <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
             Manage
             <svg
@@ -113,8 +109,188 @@ export default function AdminDashboard() {
               />
             </svg>
           </div>
+          <p className="text-gray-600">Manage eSIM data plans and pricing</p>
+          <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+            Manage
+            <svg
+              className="ml-2 h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </Link>
+
+        {/* Orders Card */}
+        <Link
+          href="/admin/orders"
+          className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">Orders</h3>
+            <svg
+              className="h-8 w-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 7l9-4 9 4M4 7v9a2 2 0 002 2h12a2 2 0 002-2V7"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 13H8m0 4h6"
+              />
+            </svg>
+          </div>
           <p className="text-gray-600">
-            Manage eSIM data plans and pricing
+            Track order lifecycle, users, and plan assignments
+          </p>
+          <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+            Review
+            <svg
+              className="ml-2 h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </Link>
+
+        {/* Payments Card */}
+        <Link
+          href="/admin/payments"
+          className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">Payments</h3>
+            <svg
+              className="h-8 w-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10v10m8-5a8 8 0 11-16 0 8 8 0 0116 0z"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-600">
+            Audit provider intents, statuses, and reconciliation data
+          </p>
+          <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+            Monitor
+            <svg
+              className="ml-2 h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </Link>
+
+        {/* eSIM Profiles Card */}
+        <Link
+          href="/admin/esims"
+          className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">
+              eSIM Profiles
+            </h3>
+            <svg
+              className="h-8 w-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 7h14M5 12h14M5 17h7"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 17h4v4h-4z"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-600">
+            Inspect provisioning status and assignments per profile
+          </p>
+          <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+            Inspect
+            <svg
+              className="ml-2 h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </Link>
+
+        {/* Inventory Card */}
+        <Link
+          href="/admin/inventory"
+          className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">Inventory</h3>
+            <svg
+              className="h-8 w-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 10h16M10 14h10M10 18h10M4 14h2m-2 4h2"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-600">
+            Monitor stock, availability, and low-stock alerts per plan
           </p>
           <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
             Manage

@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
-import re
+import uuid
 from contextlib import contextmanager
 from decimal import Decimal
 from typing import cast
 
-from fastapi.testclient import TestClient
-
+from app.api import orders as orders_module
 from app.db.session import get_db
 from app.main import app
-from app.models import Carrier, Country, Plan
-from app.models.auth_models import AuthCode, EsimProfile, EsimStatus
-
+from app.models import Carrier, Country, EsimInventory, Plan
+from app.models.auth_models import (
+    AuthCode,
+    EsimInventoryStatus,
+    EsimProfile,
+    EsimStatus,
+)
+from app.services.esim_providers import EsimProvisioningError
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -109,8 +114,8 @@ def create_paid_order(token: str, plan_id: int) -> int:
     return order_id
 
 
-def test_esim_activation_generates_uuid(setup_database):
-    """Test that eSIM activation generates UUID v4 activation code."""
+def test_esim_activation_returns_activation_code(setup_database):
+    """Test that eSIM activation responds with a non-empty activation code."""
     email = "esim_uuid@test.com"
     plan_id = seed_plan()
     token = get_auth_token(email)
@@ -125,18 +130,12 @@ def test_esim_activation_generates_uuid(setup_database):
     assert response.status_code == 200
     data = response.json()
 
-    # Check activation_code is UUID v4 format
     activation_code = data["activation_code"]
-    uuid_pattern = (
-        r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-    )
-    assert re.match(
-        uuid_pattern, activation_code, re.IGNORECASE
-    ), f"Not a valid UUID v4: {activation_code}"
+    assert activation_code
 
 
-def test_esim_activation_generates_iccid(setup_database):
-    """Test that eSIM activation generates ICCID."""
+def test_esim_activation_returns_iccid(setup_database):
+    """Test that eSIM activation responds with an ICCID value."""
     email = "esim_iccid@test.com"
     plan_id = seed_plan()
     token = get_auth_token(email)
@@ -151,10 +150,9 @@ def test_esim_activation_generates_iccid(setup_database):
     assert response.status_code == 200
     data = response.json()
 
-    # Check ICCID format
     iccid = data["iccid"]
-    assert iccid.startswith("89001")
-    assert len(iccid) == 22  # 89001 + 17 hex digits
+    assert isinstance(iccid, str)
+    assert len(iccid) >= 10
 
 
 def test_esim_status_transitions_to_active(setup_database):
@@ -304,8 +302,8 @@ def test_esim_profile_fields_populated(setup_database):
     assert "created_at" in data
 
 
-def test_esim_activation_not_repeatable(setup_database):
-    """Activating the same order twice should fail once active."""
+def test_esim_activation_idempotent_returns_existing_data(setup_database):
+    """Activating an already active eSIM returns existing payload idempotently."""
     email = "esim_idempotent@test.com"
     plan_id = seed_plan()
     token = get_auth_token(email)
@@ -324,13 +322,109 @@ def test_esim_activation_not_repeatable(setup_database):
         json={"order_id": order_id},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response2.status_code == 400
-    assert "already activated" in response2.json()["detail"].lower()
+    assert response2.status_code == 200
+    assert response2.json()["activation_code"] == code1
 
     # Ensure code unchanged in DB
     with db_session() as db:
         esim = db.query(EsimProfile).filter(EsimProfile.order_id == order_id).first()
         assert esim.activation_code == code1
+
+
+def _seed_inventory(plan_id: int) -> int:
+    with db_session() as db:
+        inventory = EsimInventory(
+            plan_id=plan_id,
+            activation_code=f"INV-{uuid.uuid4().hex[:10]}",
+            iccid=f"899{uuid.uuid4().hex[:18]}",
+            qr_payload="LPA:1$INV",
+            instructions="Use the QR to install",
+            status=EsimInventoryStatus.AVAILABLE,
+        )
+        db.add(inventory)
+        db.commit()
+        db.refresh(inventory)
+        return cast(int, inventory.id)
+
+
+def test_esim_activation_consumes_inventory_first(setup_database):
+    email = "esim_inventory@test.com"
+    plan_id = seed_plan()
+    inventory_id = _seed_inventory(plan_id)
+    token = get_auth_token(email)
+    order_id = create_paid_order(token, plan_id)
+
+    response = client.post(
+        "/api/esims/activate",
+        json={"order_id": order_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["activation_code"].startswith("INV-")
+    assert data["inventory_item_id"] == inventory_id
+
+    with db_session() as db:
+        inventory = db.query(EsimInventory).get(inventory_id)
+        assert inventory.status == EsimInventoryStatus.ASSIGNED
+        assert inventory.assigned_at is not None
+        assert inventory.activation_code == data["activation_code"]
+
+
+def test_esim_activation_creates_inventory_when_provider_used(setup_database):
+    email = "esim_provider_inventory@test.com"
+    plan_id = seed_plan()
+    token = get_auth_token(email)
+    order_id = create_paid_order(token, plan_id)
+
+    response = client.post(
+        "/api/esims/activate",
+        json={"order_id": order_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    with db_session() as db:
+        profile = db.query(EsimProfile).filter(EsimProfile.order_id == order_id).first()
+        assert profile.inventory_item_id is not None
+        inventory = db.query(EsimInventory).get(profile.inventory_item_id)
+        assert inventory.status == EsimInventoryStatus.ASSIGNED
+        assert inventory.activation_code == data["activation_code"]
+
+
+def test_esim_activation_provider_failure_returns_502(monkeypatch, setup_database):
+    email = "esim_provider_failure@test.com"
+    plan_id = seed_plan()
+    token = get_auth_token(email)
+    order_id = create_paid_order(token, plan_id)
+
+    class BoomProvider:
+        def provision(self, *, order, profile=None):  # noqa: D401 - simple stub
+            raise EsimProvisioningError("boom")
+
+    def fake_get_esim_provider(provider_name=None):
+        return BoomProvider()
+
+    monkeypatch.setattr(orders_module, "get_esim_provider", fake_get_esim_provider)
+
+    response = client.post(
+        "/api/esims/activate",
+        json={"order_id": order_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 502
+    assert "unable to provision" in response.json()["detail"].lower()
+
+    with db_session() as db:
+        profile = db.query(EsimProfile).filter(EsimProfile.order_id == order_id).first()
+        assert profile.status == EsimStatus.PENDING_ACTIVATION
+        assert profile.provisioned_at is None
+        assert profile.inventory_item_id is None
 
 
 def test_esim_preregistered_on_order_creation(setup_database):

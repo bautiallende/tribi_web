@@ -1,16 +1,33 @@
 /**
- * Checkout page - MOCK payment flow
- * POST /payments/create to create payment
- * POST /esims/activate to get activation code
+ * Checkout page – Stripe PaymentIntent flow
+ * 1) POST /api/payments/create to create a PaymentIntent (server-side)
+ * 2) Confirm the intent in the browser via Stripe Elements
+ * 3) Once Stripe reports success, call /api/esims/activate to provision the eSIM
  */
 
-'use client';
+"use client";
 
-import { Button, Card } from '@tribi/ui';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import {
+  Elements,
+  LinkAuthenticationElement,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
+import {
+  Appearance,
+  loadStripe,
+  StripeElementsOptions,
+} from "@stripe/stripe-js";
+import { Button, Card } from "@tribi/ui";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
+import { apiFetch, apiUrl } from "@/lib/apiConfig";
+
+const fallbackStripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "pk_test_placeholder",
+);
 
 interface PlanSnapshot {
   id?: number;
@@ -45,38 +62,185 @@ interface EsimProfile {
   instructions?: string | null;
 }
 
+type PaymentStep = "review" | "collect" | "processing" | "success" | "error";
+
+function useAuthToken() {
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setToken(localStorage.getItem("auth_token"));
+  }, []);
+
+  return token;
+}
+
+function OrderSummary({ order }: { order: Order | null }) {
+  if (!order) {
+    return (
+      <div className="bg-gray-50 p-6 rounded-lg animate-pulse">
+        <div className="h-4 bg-gray-200 rounded w-1/2 mb-3" />
+        <div className="h-4 bg-gray-200 rounded w-1/3" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-50 p-6 rounded-lg mb-6">
+      <h2 className="font-semibold text-gray-900 mb-4">Order Summary</h2>
+      <div className="space-y-3">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Order ID</span>
+          <span className="font-medium text-gray-900">#{order.id}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Plan</span>
+          <span className="font-medium text-gray-900">
+            {order.plan_snapshot?.name || `Plan #${order.plan_id ?? "-"}`}
+          </span>
+        </div>
+        {order.plan_snapshot?.country_name && (
+          <div className="flex justify-between">
+            <span className="text-gray-600">Destination</span>
+            <span className="font-medium text-gray-900">
+              {order.plan_snapshot.country_name}
+              {order.plan_snapshot.country_iso2
+                ? ` (${order.plan_snapshot.country_iso2.toUpperCase()})`
+                : ""}
+            </span>
+          </div>
+        )}
+        <div className="flex justify-between">
+          <span className="text-gray-600">Data & Duration</span>
+          <span className="font-medium text-gray-900">
+            {order.plan_snapshot?.data_gb
+              ? `${order.plan_snapshot.data_gb} GB`
+              : "—"}
+            {order.plan_snapshot?.duration_days
+              ? ` • ${order.plan_snapshot.duration_days} days`
+              : ""}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Price</span>
+          <span className="font-medium text-gray-900">
+            {order.amount_major
+              ? `${order.amount_major} ${order.currency}`
+              : `${(order.amount_minor_units / 100).toFixed(2)} ${
+                  order.currency
+                }`}
+          </span>
+        </div>
+        <div className="border-t border-gray-200 pt-3 flex justify-between">
+          <span className="font-semibold text-gray-900">Total</span>
+          <span className="font-bold text-lg text-indigo-600">
+            {order.amount_major
+              ? `${order.amount_major} ${order.currency}`
+              : `${(order.amount_minor_units / 100).toFixed(2)} ${
+                  order.currency
+                }`}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StripeCheckout({
+  onSuccess,
+  onError,
+}: {
+  onSuccess: () => Promise<void> | void;
+  onError: (message: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!stripe || !elements) return;
+
+      setIsSubmitting(true);
+      setMessage(null);
+
+      const result = await stripe.confirmPayment({
+        elements,
+        redirect: "if_required",
+      });
+
+      if (result.error) {
+        const msg = result.error.message || "Payment failed. Please try again.";
+        console.error("❌ Stripe confirmation error", result.error);
+        setMessage(msg);
+        onError(msg);
+      } else {
+        await onSuccess();
+      }
+
+      setIsSubmitting(false);
+    },
+    [stripe, elements, onSuccess, onError],
+  );
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement options={{ layout: "tabs" }} />
+      <LinkAuthenticationElement
+        options={{ defaultValues: { email: undefined } }}
+      />
+      {message && <p className="text-sm text-red-600">{message}</p>}
+      <Button
+        type="submit"
+        disabled={!stripe || isSubmitting}
+        className="w-full px-4 py-3 bg-indigo-600 text-white rounded"
+      >
+        {isSubmitting ? "Processing…" : "Pay securely"}
+      </Button>
+    </form>
+  );
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const orderId = searchParams.get('order_id');
+  const orderId = searchParams.get("order_id");
+  const authToken = useAuthToken();
 
-  const [authToken, setAuthToken] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [esim, setEsim] = useState<EsimProfile | null>(null);
-  const [step, setStep] = useState<'review' | 'processing' | 'success' | 'error'>('review');
-  const [error, setError] = useState('');
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>("review");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [publishableKey, setPublishableKey] = useState<string | null>(null);
+
+  const stripePromise = useMemo(() => {
+    if (publishableKey) {
+      return loadStripe(publishableKey);
+    }
+    return fallbackStripePromise;
+  }, [publishableKey]);
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-    if (!token) {
-      router.push('/auth');
+    if (authToken === null) return; // still resolving
+    if (!authToken) {
+      router.push("/auth");
       return;
     }
-
-    setAuthToken(token);
-
     if (!orderId) {
-      setError('Order ID missing');
-      setStep('error');
+      setError("Order ID missing");
+      setPaymentStep("error");
       setLoading(false);
       return;
     }
 
     const numericOrderId = Number(orderId);
     if (Number.isNaN(numericOrderId)) {
-      setError('Invalid order ID');
-      setStep('error');
+      setError("Invalid order ID");
+      setPaymentStep("error");
       setLoading(false);
       return;
     }
@@ -84,91 +248,98 @@ export default function CheckoutPage() {
     const fetchOrder = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE}/api/orders/mine`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const response = await fetch(apiUrl("/api/orders/mine"), {
+          headers: { Authorization: `Bearer ${authToken}` },
         });
-
         if (!response.ok) {
-          throw new Error('Failed to load order');
+          throw new Error("Failed to load order");
         }
-
         const orders: Order[] = await response.json();
         const found = orders.find((o) => o.id === numericOrderId);
-
         if (!found) {
-          throw new Error('Order not found');
+          throw new Error("Order not found");
         }
-
         setOrder(found);
       } catch (err) {
-        console.error('❌ Order fetch error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load order');
-        setStep('error');
+        console.error("❌ Order fetch error", err);
+        setError(err instanceof Error ? err.message : "Failed to load order");
+        setPaymentStep("error");
       } finally {
         setLoading(false);
       }
     };
 
     fetchOrder();
-  }, [orderId, router]);
+  }, [authToken, orderId, router]);
 
   const handleProcessPayment = async () => {
-    if (!order) return;
-
-    const token = authToken || (typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null);
-    if (!token) {
-      router.push('/auth');
+    if (!order || !authToken) {
+      router.push("/auth");
       return;
     }
 
-    setStep('processing');
-    setError('');
+    setPaymentStep("processing");
+    setError("");
 
     try {
-      console.log('💳 Creating payment...');
-      const paymentResponse = await fetch(`${API_BASE}/api/payments/create`, {
-        method: 'POST',
+      const payment = await apiFetch<{
+        intent_id: string;
+        client_secret: string;
+        publishable_key?: string;
+        status: string;
+        provider: string;
+      }>("/api/payments/create", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({
-          order_id: order.id,
-          provider: 'MOCK',
-        }),
+        body: JSON.stringify({ order_id: order.id, provider: "STRIPE" }),
       });
 
-      if (!paymentResponse.ok) {
-        const errorData = await paymentResponse.json();
-        throw new Error(errorData.detail || 'Payment failed');
+      if (!payment.client_secret) {
+        throw new Error("Stripe client secret missing in response");
       }
 
-      console.log('📱 Activating eSIM...');
-      const esimResponse = await fetch(`${API_BASE}/api/esims/activate`, {
-        method: 'POST',
+      setClientSecret(payment.client_secret);
+      if (payment.publishable_key) {
+        setPublishableKey(payment.publishable_key);
+      }
+      setPaymentStep("collect");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Payment processing failed",
+      );
+      setPaymentStep("error");
+    }
+  };
+
+  const activateEsim = useCallback(async () => {
+    if (!order || !authToken) return;
+
+    setPaymentStep("processing");
+
+    try {
+      const esimResponse = await apiFetch<EsimProfile>("/api/esims/activate", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({ order_id: order.id }),
       });
 
-      if (!esimResponse.ok) {
-        const errorData = await esimResponse.json();
-        throw new Error(errorData.detail || 'eSIM activation failed');
-      }
-
-      const esimData: EsimProfile = await esimResponse.json();
-      setEsim(esimData);
-      setOrder((prev) => (prev ? { ...prev, status: 'paid' } : prev));
-      setStep('success');
+      setEsim(esimResponse);
+      setOrder((prev) => (prev ? { ...prev, status: "paid" } : prev));
+      setPaymentStep("success");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment processing failed');
-      setStep('error');
+      console.error("❌ eSIM activation failed", err);
+      setError(err instanceof Error ? err.message : "Unable to activate eSIM");
+      setPaymentStep("error");
     }
-  };
+  }, [order, authToken]);
 
-  if (loading && step === 'review') {
+  if (loading && paymentStep === "review") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="p-8">
@@ -178,54 +349,58 @@ export default function CheckoutPage() {
     );
   }
 
-  if (step === 'error') {
+  if (paymentStep === "error") {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto mt-8">
           <Card className="p-8 text-center">
             <div className="text-5xl mb-4">❌</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Failed</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Payment Failed
+            </h1>
             <p className="text-gray-600 mb-6">{error}</p>
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => router.push('/account')}
-                className="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-              >
-                Back to Account
-              </Button>
-            </div>
+            <Button
+              onClick={() => router.push("/account")}
+              className="w-full px-4 py-2 bg-indigo-600 text-white rounded"
+            >
+              Back to Account
+            </Button>
           </Card>
         </div>
       </div>
     );
   }
 
-  if (step === 'processing') {
+  if (paymentStep === "processing") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="p-8 text-center space-y-4">
           <div className="text-5xl">💳</div>
-          <h2 className="text-2xl font-semibold text-gray-900">Processing payment...</h2>
+          <h2 className="text-2xl font-semibold text-gray-900">
+            Processing payment...
+          </h2>
           <p className="text-gray-600">This may take just a few seconds.</p>
         </Card>
       </div>
     );
   }
 
-  if (step === 'success' && esim) {
+  if (paymentStep === "success" && esim) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto mt-8">
           <Card className="p-8 text-center">
             <div className="text-5xl mb-4">✅</div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Payment Successful!
+            </h1>
             <p className="text-gray-600 mb-6">Your eSIM is ready to use</p>
 
             <div className="bg-blue-50 p-4 rounded mb-6 text-left">
               <p className="text-sm text-gray-600 mb-2">Activation Code:</p>
               <div className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
                 <code className="font-mono text-sm text-gray-900">
-                  {esim.activation_code || 'Activation code not available yet'}
+                  {esim.activation_code || "Activation code not available yet"}
                 </code>
                 <button
                   onClick={() => {
@@ -240,11 +415,15 @@ export default function CheckoutPage() {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Status: <span className="font-medium text-green-600">{esim.status}</span>
+                Status:{" "}
+                <span className="font-medium text-green-600">
+                  {esim.status}
+                </span>
               </p>
               {esim.iccid && (
                 <p className="text-xs text-gray-500 mt-2">
-                  ICCID: <span className="font-mono text-gray-900">{esim.iccid}</span>
+                  ICCID:{" "}
+                  <span className="font-mono text-gray-900">{esim.iccid}</span>
                 </p>
               )}
               {esim.qr_payload && (
@@ -256,115 +435,73 @@ export default function CheckoutPage() {
                 </div>
               )}
               <p className="text-sm text-gray-600 mt-4">
-                {esim.instructions ||
-                  'Install via Settings > Cellular > Add eSIM and scan the QR or enter the activation code manually.'}
+                Use this code or QR to install the profile on your device. Check
+                the account page for full instructions.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => router.push('/account')}
-                className="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-              >
-                View My Account
-              </Button>
-            </div>
+            <Button
+              onClick={() => router.push("/account")}
+              className="w-full px-4 py-2 bg-indigo-600 text-white rounded"
+            >
+              View My Account
+            </Button>
           </Card>
         </div>
       </div>
     );
   }
 
+  const appearance: Appearance = { theme: "stripe" };
+  const elementsOptions: StripeElementsOptions | undefined = clientSecret
+    ? { clientSecret, appearance }
+    : undefined;
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-md mx-auto mt-8">
+      <div className="max-w-2xl mx-auto mt-8">
         <Card className="p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Complete Your Purchase</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">
+            Complete Your Purchase
+          </h1>
+          <OrderSummary order={order} />
 
-          {/* Order Summary */}
-          <div className="bg-gray-50 p-6 rounded-lg mb-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Order Summary</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Order ID</span>
-                <span className="font-medium text-gray-900">#{order?.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Plan</span>
-                <span className="font-medium text-gray-900">
-                  {order?.plan_snapshot?.name || `Plan #${order?.plan_id ?? '-'}`}
-                </span>
-              </div>
-              {order?.plan_snapshot?.country_name && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Destination</span>
-                  <span className="font-medium text-gray-900">
-                    {order.plan_snapshot.country_name}
-                    {order.plan_snapshot.country_iso2
-                      ? ` (${order.plan_snapshot.country_iso2.toUpperCase()})`
-                      : ''}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-600">Data & Duration</span>
-                <span className="font-medium text-gray-900">
-                  {order?.plan_snapshot?.data_gb ? `${order.plan_snapshot.data_gb} GB` : '—'}
-                  {order?.plan_snapshot?.duration_days ? ` • ${order.plan_snapshot.duration_days} days` : ''}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Price</span>
-                <span className="font-medium text-gray-900">
-                  {order
-                    ? order.amount_major
-                      ? `${order.amount_major} ${order.currency}`
-                      : `${(order.amount_minor_units / 100).toFixed(2)} ${order.currency}`
-                    : '-'}
-                </span>
-              </div>
-              <div className="border-t border-gray-200 pt-3 flex justify-between">
-                <span className="font-semibold text-gray-900">Total</span>
-                <span className="font-bold text-lg text-indigo-600">
-                  {order
-                    ? order.amount_major
-                      ? `${order.amount_major} ${order.currency}`
-                      : `${(order.amount_minor_units / 100).toFixed(2)} ${order.currency}`
-                    : '-'}
-                </span>
-              </div>
+          {!clientSecret && (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                We use Stripe to process payments securely. Click below to start
+                checkout.
+              </p>
+              <Button
+                onClick={handleProcessPayment}
+                disabled={loading || !order}
+                className="w-full px-4 py-3 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold"
+              >
+                Start Stripe Checkout
+              </Button>
+            </>
+          )}
+
+          {clientSecret && elementsOptions && (
+            <div className="mt-6">
+              <Elements stripe={stripePromise} options={elementsOptions}>
+                <StripeCheckout
+                  onSuccess={activateEsim}
+                  onError={(msg) => setError(msg)}
+                />
+              </Elements>
             </div>
-          </div>
+          )}
 
-          {/* Payment Method */}
-          <div className="mb-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Payment Method</h2>
-            <div className="border-2 border-indigo-500 rounded-lg p-4 bg-indigo-50">
-              <p className="font-medium text-gray-900">💳 Mock Payment</p>
-              <p className="text-sm text-gray-600">Test payment processor</p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-3">
-            <Button
-              onClick={handleProcessPayment}
-              disabled={loading || !order}
-              className="w-full px-4 py-3 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-semibold disabled:opacity-50"
-            >
-              {loading || !order ? 'Loading...' : 'Pay Now'}
-            </Button>
-            <Button
-              onClick={() => router.push('/account')}
-              disabled={loading}
-              className="w-full px-4 py-2 bg-gray-200 text-gray-900 rounded hover:bg-gray-300"
-            >
-              Cancel
-            </Button>
-          </div>
-
+          <Button
+            onClick={() => router.push("/account")}
+            className="w-full px-4 py-2 bg-gray-200 text-gray-900 rounded hover:bg-gray-300 mt-4"
+          >
+            Cancel
+          </Button>
           <p className="text-xs text-gray-500 text-center mt-4">
-            This is a demo payment. No real charges will be made.
+            Payments are processed securely by Stripe. Your card details never
+            touch Tribi servers.
           </p>
         </Card>
       </div>

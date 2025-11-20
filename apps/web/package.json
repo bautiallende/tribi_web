@@ -11,6 +11,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.8.4",
     "@tribi/ui": "*",
+    "@stripe/react-stripe-js": "^3.0.0",
+    "@stripe/stripe-js": "^4.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "i18next": "^23.7.6",

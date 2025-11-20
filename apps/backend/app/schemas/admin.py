@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Generic, TypeVar
+from datetime import datetime
+from typing import Any, Generic, TypeVar
 
+from pydantic import BaseModel, Field
 
 # ========================================
 # Country Schemas
@@ -76,3 +77,82 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int
     page_size: int
     total_pages: int
+
+
+# ========================================
+# Admin Dashboard Entities
+# ========================================
+
+
+class AdminUserSummary(BaseModel):
+    id: int
+    email: str | None = None
+    name: str | None = None
+
+
+class AdminPaymentRead(BaseModel):
+    id: int
+    order_id: int
+    provider: str
+    status: str
+    intent_id: str | None = None
+    created_at: datetime
+    order_amount_minor_units: int
+    order_currency: str | None = None
+
+
+class AdminEsimProfileRead(BaseModel):
+    id: int
+    order_id: int | None = None
+    status: str
+    activation_code: str | None = None
+    iccid: str | None = None
+    inventory_item_id: int | None = None
+    plan_id: int | None = None
+    country_id: int | None = None
+    carrier_id: int | None = None
+    provisioned_at: datetime | None = None
+    provider_reference: str | None = None
+    created_at: datetime
+
+
+class AdminInventoryRead(BaseModel):
+    id: int
+    plan_id: int | None = None
+    carrier_id: int | None = None
+    country_id: int | None = None
+    status: str
+    activation_code: str | None = None
+    iccid: str | None = None
+    qr_payload: str | None = None
+    instructions: str | None = None
+    provider_reference: str | None = None
+    reserved_at: datetime | None = None
+    assigned_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class AdminOrderRead(BaseModel):
+    id: int
+    status: str
+    currency: str
+    amount_minor_units: int
+    created_at: datetime
+    plan_id: int | None = None
+    plan_snapshot: dict[str, Any] | None = None
+    user: AdminUserSummary | None = None
+    payments: list[AdminPaymentRead] = []
+    esim_profile: AdminEsimProfileRead | None = None
+
+
+class AdminStockAlert(BaseModel):
+    plan_id: int
+    plan_name: str | None = None
+    available: int
+
+
+class AdminInventoryStats(BaseModel):
+    totals: dict[str, int]
+    low_stock_threshold: int
+    low_stock_alerts: list[AdminStockAlert]

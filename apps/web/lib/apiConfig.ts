@@ -23,7 +23,7 @@ export const apiUrl = (path: string): string =>
  */
 export async function apiFetch<T = any>(
   url: string,
-  options?: RequestInit
+  options?: RequestInit,
 ): Promise<T> {
   const fullUrl = url.startsWith("http") ? url : apiUrl(url);
 
@@ -51,17 +51,17 @@ export async function apiFetch<T = any>(
         throw new Error(
           errorData.detail ||
             errorData.message ||
-            `Request failed: ${response.status}`
+            `Request failed: ${response.status}`,
         );
       } catch (parseError) {
         throw new Error(
-          `Request failed: ${response.status} ${response.statusText}`
+          `Request failed: ${response.status} ${response.statusText}`,
         );
       }
     }
 
     throw new Error(
-      `Request failed: ${response.status} ${response.statusText}`
+      `Request failed: ${response.status} ${response.statusText}`,
     );
   }
 
@@ -81,4 +81,26 @@ export async function apiFetch<T = any>(
     console.error("Response text:", text.slice(0, 500));
     throw new Error("Failed to parse response as JSON");
   }
+}
+
+export async function createPaymentIntent(
+  orderId: number,
+  token?: string | null,
+  provider?: string,
+) {
+  return apiFetch<{
+    intent_id: string;
+    client_secret?: string;
+    publishable_key?: string;
+    status: string;
+    provider: string;
+  }>("/api/payments/create", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(provider ? { "X-Provider": provider } : {}),
+    },
+    body: JSON.stringify({ order_id: orderId, provider }),
+  });
 }

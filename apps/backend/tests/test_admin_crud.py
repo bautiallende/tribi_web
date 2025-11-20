@@ -1,64 +1,6 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from app.core.config import settings
-from app.main import app
-from app.models import Carrier, Country, Plan, User
-
-from .conftest import TestingSessionLocal
-
-
-@pytest.fixture
-def client():
-    """FastAPI test client."""
-    return TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def cleanup_seed_data(setup_database):
-    """Remove default seed objects so admin tests start with a blank slate."""
-    db = TestingSessionLocal()
-    try:
-        db.query(Plan).delete()
-        db.query(Carrier).delete()
-        db.query(Country).delete()
-        db.commit()
-    finally:
-        db.close()
-
-
-@pytest.fixture
-def admin_headers(monkeypatch):
-    """Mock admin authentication."""
-    monkeypatch.setattr(settings, "ADMIN_EMAILS", "admin@tribi.app")
-    monkeypatch.setattr(settings, "admin_emails_list", ["admin@tribi.app"])
-
-    # Mock get_current_admin to return admin user
-    from app.api.auth import get_current_admin
-
-    def mock_admin():
-        return User(id=1, email="admin@tribi.app")
-
-    app.dependency_overrides[get_current_admin] = mock_admin
-
-    return {"Authorization": "Bearer mock-admin-token"}
-
-
-@pytest.fixture
-def non_admin_headers():
-    """Mock non-admin authentication."""
-    from app.api.auth import get_current_admin
-
-    def mock_non_admin():
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
-
-    app.dependency_overrides[get_current_admin] = mock_non_admin
-
-    return {"Authorization": "Bearer mock-user-token"}
+pytestmark = pytest.mark.usefixtures("cleanup_seed_data")
 
 
 # ========================================

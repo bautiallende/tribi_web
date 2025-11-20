@@ -13,15 +13,27 @@ export default function AdminLayout({
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const navLinks = [
+    { href: "/admin/countries", label: "Countries" },
+    { href: "/admin/carriers", label: "Carriers" },
+    { href: "/admin/plans", label: "Plans" },
+    { href: "/admin/orders", label: "Orders" },
+    { href: "/admin/payments", label: "Payments" },
+    { href: "/admin/esims", label: "eSIMs" },
+    { href: "/admin/inventory", label: "Inventory" },
+  ];
 
   useEffect(() => {
     async function checkAuth() {
       try {
         console.log("🔐 Admin layout: Checking authentication...");
-        
+
         // Get token from localStorage
-        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-        
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("auth_token")
+            : null;
+
         if (!token) {
           console.log("❌ No auth token found, redirecting to /auth");
           router.push("/auth?redirect=/admin");
@@ -29,13 +41,13 @@ export default function AdminLayout({
         }
 
         // Check if user is authenticated and get user details
-        const authUrl = apiUrl('/api/auth/me');
+        const authUrl = apiUrl("/api/auth/me");
         console.log("🔗 Checking auth at:", authUrl);
-        
+
         const response = await fetch(authUrl, {
           credentials: "include",
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -44,8 +56,8 @@ export default function AdminLayout({
         if (!response.ok) {
           console.log("❌ Not authenticated, redirecting to /auth");
           // Clear invalid token
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('auth_token');
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("auth_token");
           }
           router.push("/auth?redirect=/admin");
           return;
@@ -57,15 +69,15 @@ export default function AdminLayout({
         // Check if user is admin
         // Backend admin check: user email must be in ADMIN_EMAILS list
         console.log("🔍 Checking admin privileges for:", user.email);
-        
+
         // Try to access admin endpoint to verify admin status
-        const adminCheckUrl = apiUrl('/admin/countries?page=1&page_size=1');
+        const adminCheckUrl = apiUrl("/admin/countries?page=1&page_size=1");
         console.log("🔗 Admin check endpoint:", adminCheckUrl);
-        
+
         const adminCheckResponse = await fetch(adminCheckUrl, {
           credentials: "include",
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -73,14 +85,21 @@ export default function AdminLayout({
 
         if (adminCheckResponse.status === 403) {
           console.log(`❌ User ${user.email} is not admin - 403 Forbidden`);
-          console.log("💡 To grant admin access, add this email to ADMIN_EMAILS in backend .env");
-          setError(`Access denied. User ${user.email} does not have admin privileges.`);
+          console.log(
+            "💡 To grant admin access, add this email to ADMIN_EMAILS in backend .env",
+          );
+          setError(
+            `Access denied. User ${user.email} does not have admin privileges.`,
+          );
           setIsAuthorized(false);
           return;
         }
 
         if (!adminCheckResponse.ok) {
-          console.log("❌ Failed to verify admin access:", adminCheckResponse.status);
+          console.log(
+            "❌ Failed to verify admin access:",
+            adminCheckResponse.status,
+          );
           setError("Failed to verify admin access.");
           setIsAuthorized(false);
           return;
@@ -167,24 +186,34 @@ export default function AdminLayout({
                 Admin Panel
               </h1>
               <div className="flex items-center gap-4">
-                <a
-                  href="/admin/countries"
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-                >
-                  Countries
-                </a>
-                <a
-                  href="/admin/carriers"
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-                >
-                  Carriers
-                </a>
-                <a
-                  href="/admin/plans"
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-                >
-                  Plans
-                </a>
+                <div className="hidden flex-wrap items-center gap-4 md:flex">
+                  {navLinks.map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 md:hidden">
+                  {navLinks.slice(0, 3).map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                    >
+                      {link.label}
+                    </a>
+                  ))}
+                  <a
+                    href="/admin"
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                  >
+                    More…
+                  </a>
+                </div>
                 <button
                   onClick={() => router.push("/")}
                   className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"

@@ -1,22 +1,90 @@
+import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional, cast
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session, joinedload
 
+from ..core.config import settings
 from ..db.session import get_db
-from ..models import EsimProfile, Order, Payment, Plan, User
-from ..models.auth_models import EsimStatus, OrderStatus, PaymentProvider, PaymentStatus
-from ..services.payment_providers import get_payment_provider
+from ..models import EsimInventory, EsimProfile, Order, Payment, Plan, User
+from ..models.auth_models import (
+    EsimInventoryStatus,
+    EsimStatus,
+    OrderStatus,
+    PaymentStatus,
+)
+from ..models.auth_models import (
+    PaymentProvider as PaymentProviderEnum,
+)
+from ..services.esim_inventory import (
+    create_inventory_from_provisioning,
+    reserve_inventory_item,
+    result_from_inventory_item,
+)
+from ..services.esim_providers import (
+    EsimProvisioningError,
+    EsimProvisioningResult,
+    get_esim_provider,
+)
+from ..services.payment_providers import (
+    PaymentWebhookValidationError,
+    get_payment_provider,
+)
 from ..services.pricing import format_minor_units, to_minor_units
 from .auth import get_current_user
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 payments_router = APIRouter(prefix="/api/payments", tags=["payments"])
 esims_router = APIRouter(prefix="/api/esims", tags=["esims"])
+logger = logging.getLogger(__name__)
+DEFAULT_ESIM_INSTRUCTIONS = "Install via Settings > Cellular > Add eSIM and scan the QR or enter the activation code manually."
+
+
+def _apply_provisioning_to_esim(
+    *,
+    esim: EsimProfile,
+    provisioning_result: EsimProvisioningResult,
+    inventory_item: EsimInventory | None,
+) -> None:
+    """Persist provisioning data onto the EsimProfile and optional inventory row."""
+
+    activation_code = (
+        provisioning_result.activation_code or esim.activation_code or str(uuid.uuid4())
+    )
+    iccid = provisioning_result.iccid or esim.iccid or f"89001{uuid.uuid4().hex[:17]}"
+    qr_payload = (
+        provisioning_result.qr_payload or esim.qr_payload or f"LPA:1${activation_code}"
+    )
+    instructions = (
+        provisioning_result.instructions
+        or esim.instructions
+        or DEFAULT_ESIM_INSTRUCTIONS
+    )
+
+    esim.activation_code = activation_code  # type: ignore[assignment]
+    esim.iccid = iccid  # type: ignore[assignment]
+    esim.qr_payload = qr_payload  # type: ignore[assignment]
+    esim.instructions = instructions  # type: ignore[assignment]
+    esim.status = EsimStatus.ACTIVE  # type: ignore[assignment]
+    esim.provider_reference = provisioning_result.provider_reference or esim.provider_reference  # type: ignore[assignment]
+    esim.provider_payload = provisioning_result.metadata  # type: ignore[assignment]
+    esim.provisioned_at = datetime.utcnow()  # type: ignore[assignment]
+
+    if inventory_item:
+        inventory_item.activation_code = (
+            inventory_item.activation_code or activation_code
+        )
+        inventory_item.iccid = inventory_item.iccid or iccid
+        inventory_item.qr_payload = inventory_item.qr_payload or qr_payload
+        inventory_item.instructions = inventory_item.instructions or instructions
+        inventory_item.status = EsimInventoryStatus.ASSIGNED
+        inventory_item.assigned_at = inventory_item.assigned_at or datetime.utcnow()
+        esim.inventory_item = inventory_item  # type: ignore[assignment]
+        esim.inventory_item_id = inventory_item.id  # type: ignore[assignment]
 
 
 class PlanSnapshot(BaseModel):
@@ -53,7 +121,7 @@ class OrderCreateRequest(BaseModel):
 
 class PaymentCreateRequest(BaseModel):
     order_id: int
-    provider: str = "MOCK"
+    provider: str | None = None
 
 
 class EsimActivateRequest(BaseModel):
@@ -67,8 +135,12 @@ class EsimProfileRead(BaseModel):
     iccid: Optional[str]
     status: str
     created_at: datetime
+    provisioned_at: Optional[datetime] = None
+    provider_reference: Optional[str] = None
     qr_payload: Optional[str] = None
     instructions: Optional[str] = None
+    provider_payload: Optional[dict[str, Any]] = None
+    inventory_item_id: Optional[int] = None
     plan_id: Optional[int] = None
     country_id: Optional[int] = None
     carrier_id: Optional[int] = None
@@ -172,13 +244,37 @@ def serialize_esim(
         "iccid": esim.iccid,
         "status": status,
         "created_at": esim.created_at,
+        "provisioned_at": getattr(esim, "provisioned_at", None),
+        "provider_reference": getattr(esim, "provider_reference", None),
+        "provider_payload": getattr(esim, "provider_payload", None),
         "qr_payload": esim.qr_payload,
         "instructions": esim.instructions,
+        "inventory_item_id": getattr(esim, "inventory_item_id", None),
         "plan_id": esim.plan_id,
         "country_id": esim.country_id,
         "carrier_id": esim.carrier_id,
         "plan_snapshot": plan_snapshot,
     }
+
+
+def _map_payment_status(status: str | None) -> PaymentStatus:
+    normalized = (status or PaymentStatus.REQUIRES_ACTION.value).lower()
+    if normalized == PaymentStatus.SUCCEEDED.value:
+        return PaymentStatus.SUCCEEDED
+    if normalized == PaymentStatus.FAILED.value:
+        return PaymentStatus.FAILED
+    return PaymentStatus.REQUIRES_ACTION
+
+
+def _update_order_status_from_payment(
+    order: Order | None, payment_status: PaymentStatus
+) -> None:
+    if not order:
+        return
+    if payment_status == PaymentStatus.SUCCEEDED:
+        order.status = OrderStatus.PAID  # type: ignore[assignment]
+    elif payment_status == PaymentStatus.FAILED:
+        order.status = OrderStatus.FAILED  # type: ignore[assignment]
 
 
 @router.post("", response_model=OrderRead)
@@ -268,10 +364,11 @@ def create_payment(
     payload: PaymentCreateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(None),
 ):
     """Create a payment intent using configured payment provider."""
     order_id = payload.order_id
-    provider = payload.provider
+    provider_name = (payload.provider or settings.PAYMENT_PROVIDER).upper()
     order = (
         db.query(Order)
         .filter(Order.id == order_id, Order.user_id == current_user.id)
@@ -280,67 +377,99 @@ def create_payment(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    try:
+        provider_enum = PaymentProviderEnum[provider_name]
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=400, detail="Unsupported payment provider"
+        ) from exc
+
     # Get provider instance
-    payment_provider = get_payment_provider(provider)
+    try:
+        payment_provider = get_payment_provider(provider_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    provider_idempotency_key = None
+    if idempotency_key:
+        provider_idempotency_key = f"{current_user.id}:{idempotency_key}"
 
     # Create payment intent
     intent = payment_provider.create_intent(
         amount_minor_units=int(order.amount_minor_units),  # type: ignore
-        currency=str(order.currency),  # type: ignore
+        currency=str(order.currency or settings.DEFAULT_CURRENCY),
         metadata={"order_id": order.id, "user_id": current_user.id},
+        idempotency_key=provider_idempotency_key,
     )
+
+    payment_status = _map_payment_status(intent.status)
 
     # Store payment record
     payment = Payment(
         order_id=order_id,
-        provider=PaymentProvider[provider.upper()],
-        status=PaymentStatus[intent.status.upper()],
+        provider=provider_enum,
+        status=payment_status,
         intent_id=intent.intent_id,
         raw_payload={"intent": intent.intent_id, "metadata": intent.metadata},
     )
     db.add(payment)
-    if intent.status == "succeeded":
-        order.status = OrderStatus.PAID  # type: ignore
+    _update_order_status_from_payment(order, payment_status)
     db.commit()
 
-    return {
+    response_payload = {
         "intent_id": intent.intent_id,
         "status": intent.status,
-        "provider": provider,
+        "provider": provider_name,
         "amount_minor_units": intent.amount_minor_units,
         "currency": intent.currency,
     }
 
+    if intent.client_secret:
+        response_payload["client_secret"] = intent.client_secret
+        response_payload["publishable_key"] = settings.STRIPE_PUBLISHABLE_KEY
+
+    return response_payload
+
 
 @payments_router.post("/webhook")
-def payment_webhook(data: dict, db: Session = Depends(get_db)):
+async def payment_webhook(
+    request: Request,
+    provider: str | None = None,
+    db: Session = Depends(get_db),
+):
     """Handle payment webhooks from providers."""
-    provider_name = data.get("provider", "MOCK")
-    intent_id = data.get("intent_id")
+    provider_name = (provider or settings.PAYMENT_PROVIDER).upper()
 
-    if not intent_id:
+    try:
+        payment_provider = get_payment_provider(provider_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    raw_body = await request.body()
+    headers = dict(request.headers)
+
+    try:
+        payload = payment_provider.parse_webhook_payload(raw_body, headers)
+    except PaymentWebhookValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    intent = payment_provider.process_webhook(payload)
+
+    if not intent.intent_id:
         raise HTTPException(status_code=400, detail="Missing intent_id")
 
-    # Get provider instance
-    payment_provider = get_payment_provider(provider_name)
-
-    # Process webhook
-    intent = payment_provider.process_webhook(data)
-
-    # Find payment by intent_id
-    payment = db.query(Payment).filter(Payment.intent_id == intent_id).first()
+    payment = db.query(Payment).filter(Payment.intent_id == intent.intent_id).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
 
     # Update payment status
-    payment.status = PaymentStatus[intent.status.upper()]  # type: ignore
+    payment_status = _map_payment_status(intent.status)
+    setattr(payment, "status", payment_status)
+    setattr(payment, "raw_payload", payload)
 
     # Update order status based on payment
     order = db.query(Order).filter(Order.id == payment.order_id).first()
-    if intent.status == "succeeded":
-        order.status = OrderStatus.PAID  # type: ignore
-    elif intent.status == "failed":
-        order.status = OrderStatus.FAILED  # type: ignore
+    _update_order_status_from_payment(order, payment_status)
 
     db.commit()
 
@@ -374,25 +503,66 @@ def activate_esim(
     if not esim:
         raise HTTPException(status_code=404, detail="eSIM profile not found")
 
-    if esim.status != EsimStatus.PENDING_ACTIVATION:  # type: ignore[comparison-overlap]
+    esim_status = (
+        esim.status if isinstance(esim.status, EsimStatus) else EsimStatus(esim.status)
+    )
+
+    if esim.provisioned_at or esim_status in {EsimStatus.ASSIGNED, EsimStatus.ACTIVE}:  # type: ignore[arg-type]
+        # Already provisioned, return existing payload idempotently.
+        return EsimProfileRead(**serialize_esim(esim))
+
+    if esim_status not in {EsimStatus.PENDING_ACTIVATION, EsimStatus.RESERVED}:
         raise HTTPException(
             status_code=400,
             detail="eSIM already activated or not ready for activation",
         )
 
-    activation_code = esim.activation_code or str(uuid.uuid4())
-    esim.activation_code = activation_code  # type: ignore[assignment]
-    if esim.iccid is None:
-        esim.iccid = f"89001{uuid.uuid4().hex[:17]}"  # type: ignore[assignment]
-    esim.status = EsimStatus.ACTIVE  # type: ignore[assignment]
-    if esim.qr_payload is None:
-        esim.qr_payload = f"LPA:1${activation_code}"  # type: ignore[assignment]
-    if esim.instructions is None:
-        instruction_text = (
-            "Install via Settings > Cellular > Add eSIM and scan the QR "
-            "or enter the activation code manually."
+    plan_snapshot = cast(dict[str, Any], order.plan_snapshot or {})
+    plan_id = cast(
+        Optional[int], getattr(esim, "plan_id", None) or getattr(order, "plan_id", None)
+    )
+    country_id = cast(
+        Optional[int],
+        getattr(esim, "country_id", None) or plan_snapshot.get("country_id"),
+    )
+    carrier_id = cast(
+        Optional[int],
+        getattr(esim, "carrier_id", None) or plan_snapshot.get("carrier_id"),
+    )
+
+    inventory_item = reserve_inventory_item(
+        db,
+        plan_id=plan_id,
+        country_id=country_id,
+        carrier_id=carrier_id,
+    )
+
+    provisioning_result: EsimProvisioningResult
+    if inventory_item:
+        provisioning_result = result_from_inventory_item(inventory_item)
+    else:
+        provider = get_esim_provider()
+        try:
+            provisioning_result = provider.provision(order=order, profile=esim)
+        except EsimProvisioningError as exc:
+            logger.error("eSIM provisioning failed for order %s: %s", order.id, exc)
+            raise HTTPException(
+                status_code=502, detail="Unable to provision eSIM"
+            ) from exc
+
+        inventory_item = create_inventory_from_provisioning(
+            db,
+            plan_id=plan_id,
+            country_id=country_id,
+            carrier_id=carrier_id,
+            provisioning_result=provisioning_result,
         )
-        setattr(esim, "instructions", instruction_text)
+
+    _apply_provisioning_to_esim(
+        esim=esim,
+        provisioning_result=provisioning_result,
+        inventory_item=inventory_item,
+    )
 
     db.commit()
     db.refresh(esim)
