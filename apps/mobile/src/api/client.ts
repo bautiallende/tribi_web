@@ -25,7 +25,7 @@ interface FetchOptions extends RequestInit {
 
 export const apiClient = async <T = any>(
   endpoint: string,
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<T> => {
   const { requiresAuth = false, headers = {}, ...rest } = options;
 
@@ -62,8 +62,20 @@ export const apiClient = async <T = any>(
       const errorData = await response
         .json()
         .catch(() => ({ detail: "Unknown error" }));
+
+      if (response.status === 401 && requiresAuth) {
+        const token = await getToken();
+        if (token) {
+          console.warn("🔒 Session invalid, clearing stored token");
+          await clearToken();
+        }
+      }
+
       console.error(`❌ API Error:`, errorData);
-      throw new Error(errorData.detail || `HTTP ${response.status}`);
+      const detail = errorData.detail || `HTTP ${response.status}`;
+      throw new Error(
+        response.status === 401 ? `${detail}. Please sign in again.` : detail,
+      );
     }
 
     const data = await response.json();
@@ -107,7 +119,7 @@ export const authAPI = {
 export const countriesAPI = {
   getAll: async () => {
     return apiClient<Array<{ id: number; iso2: string; name: string }>>(
-      "/api/countries"
+      "/api/countries",
     );
   },
 };

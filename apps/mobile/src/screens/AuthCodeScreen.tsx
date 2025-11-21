@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-} from 'react-native';
-import { authAPI } from '../api/client';
+} from "react-native";
+import { authAPI } from "../api/client";
 
 interface AuthCodeScreenProps {
   navigation: any;
@@ -22,11 +22,14 @@ interface AuthCodeScreenProps {
   };
 }
 
-export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProps) {
+export default function AuthCodeScreen({
+  navigation,
+  route,
+}: AuthCodeScreenProps) {
   const { email } = route.params;
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const handleCodeChange = (text: string, index: number) => {
@@ -36,7 +39,7 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
-    setError('');
+    setError("");
 
     // Auto-focus next input
     if (text && index < 5) {
@@ -45,22 +48,22 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
 
     // Auto-submit when all digits are entered
     if (text && index === 5 && newCode.every((digit) => digit)) {
-      handleVerify(newCode.join(''));
+      handleVerify(newCode.join(""));
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
     // Handle backspace
-    if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+    if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
   const handleVerify = async (verificationCode?: string) => {
-    const codeToVerify = verificationCode || code.join('');
-    
+    const codeToVerify = verificationCode || code.join("");
+
     if (codeToVerify.length !== 6) {
-      setError('Please enter the complete 6-digit code');
+      setError("Please enter the complete 6-digit code");
       return;
     }
 
@@ -70,11 +73,13 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
       // Navigate to main app (Account screen)
       navigation.reset({
         index: 0,
-        routes: [{ name: 'MainTabs' }],
+        routes: [{ name: "MainTabs" }],
       });
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Invalid verification code');
-      setCode(['', '', '', '', '', '']);
+      setError(
+        error instanceof Error ? error.message : "Invalid verification code",
+      );
+      setCode(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
     } finally {
       setIsLoading(false);
@@ -84,20 +89,23 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
   const handleResendCode = async () => {
     try {
       await authAPI.requestCode(email);
-      Alert.alert('Success', 'A new verification code has been sent to your email');
-      setCode(['', '', '', '', '', '']);
+      Alert.alert(
+        "Success",
+        "A new verification code has been sent to your email",
+      );
+      setCode(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
     } catch (error) {
       Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to resend code'
+        "Error",
+        error instanceof Error ? error.message : "Failed to resend code",
       );
     }
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
       <ScrollView
@@ -110,7 +118,7 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
             <Text style={styles.logo}>🔐</Text>
             <Text style={styles.title}>Enter Verification Code</Text>
             <Text style={styles.subtitle}>
-              We sent a 6-digit code to{'\n'}
+              We sent a 6-digit code to{"\n"}
               <Text style={styles.email}>{email}</Text>
             </Text>
           </View>
@@ -120,7 +128,9 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
             {code.map((digit, index) => (
               <TextInput
                 key={index}
-                ref={(ref) => (inputRefs.current[index] = ref)}
+                ref={(ref) => {
+                  inputRefs.current[index] = ref;
+                }}
                 style={[
                   styles.codeInput,
                   digit && styles.codeInputFilled,
@@ -137,9 +147,7 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
             ))}
           </View>
 
-          {error && (
-            <Text style={styles.errorText}>{error}</Text>
-          )}
+          {error && <Text style={styles.errorText}>{error}</Text>}
 
           {/* Resend Button */}
           <TouchableOpacity
@@ -147,7 +155,9 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
             onPress={handleResendCode}
             disabled={isLoading}
           >
-            <Text style={styles.resendText}>Didn't receive the code? Resend</Text>
+            <Text style={styles.resendText}>
+              Didn't receive the code? Resend
+            </Text>
           </TouchableOpacity>
 
           {/* Submit Button */}
@@ -180,7 +190,7 @@ export default function AuthCodeScreen({ navigation, route }: AuthCodeScreenProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
     flexGrow: 1,
@@ -193,7 +203,7 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 48,
-    alignItems: 'center',
+    alignItems: "center",
   },
   logo: {
     fontSize: 60,
@@ -201,67 +211,67 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
-    color: '#64748B',
-    textAlign: 'center',
+    color: "#64748B",
+    textAlign: "center",
     lineHeight: 24,
   },
   email: {
-    fontWeight: '600',
-    color: '#3B82F6',
+    fontWeight: "600",
+    color: "#3B82F6",
   },
   codeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 16,
   },
   codeInput: {
     width: 48,
     height: 56,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 2,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    color: '#0F172A',
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#0F172A",
   },
   codeInputFilled: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
+    borderColor: "#3B82F6",
+    backgroundColor: "#EFF6FF",
   },
   codeInputError: {
-    borderColor: '#EF4444',
+    borderColor: "#EF4444",
   },
   errorText: {
     fontSize: 14,
-    color: '#EF4444',
-    textAlign: 'center',
+    color: "#EF4444",
+    textAlign: "center",
     marginBottom: 16,
   },
   resendButton: {
     paddingVertical: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   resendText: {
     fontSize: 14,
-    color: '#3B82F6',
-    fontWeight: '600',
+    color: "#3B82F6",
+    fontWeight: "600",
   },
   button: {
     height: 48,
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
   },
   buttonDisabled: {
@@ -269,16 +279,16 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   backButton: {
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   backText: {
     fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
+    color: "#64748B",
+    fontWeight: "500",
   },
 });

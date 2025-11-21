@@ -58,6 +58,35 @@ class EsimInventoryStatus(enum.Enum):
     RETIRED = "retired"
 
 
+class SupportTicketStatus(enum.Enum):
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    ARCHIVED = "archived"
+
+
+class SupportTicketPriority(enum.Enum):
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+
+
+class SupportTicketEventType(enum.Enum):
+    CREATED = "created"
+    STATUS_CHANGED = "status_changed"
+    PRIORITY_CHANGED = "priority_changed"
+    NOTE_ADDED = "note_added"
+    REMINDER_SENT = "reminder_sent"
+    ESCALATED = "escalated"
+    SLA_UPDATED = "sla_updated"
+
+
+class InvoiceStatus(enum.Enum):
+    DRAFT = "draft"
+    ISSUED = "issued"
+    VOID = "void"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -66,9 +95,12 @@ class User(Base):
     name = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=utcnow)
     last_login = Column(DateTime, nullable=True)
+    internal_notes = Column(Text, nullable=True)
 
     auth_codes = relationship("AuthCode", back_populates="user")
     orders = relationship("Order", back_populates="user")
+    invoices = relationship("Invoice", back_populates="user")
+    support_tickets = relationship("SupportTicket", back_populates="user")
     esim_profiles = relationship("EsimProfile", back_populates="user")
 
 
@@ -110,6 +142,8 @@ class Order(Base):
     plan = relationship("Plan")
     payments = relationship("Payment", back_populates="order")
     esim_profile = relationship("EsimProfile", back_populates="order", uselist=False)
+    invoice = relationship("Invoice", back_populates="order", uselist=False)
+    support_tickets = relationship("SupportTicket", back_populates="order")
 
 
 class EsimProfile(Base):
@@ -127,7 +161,12 @@ class EsimProfile(Base):
     activation_code = Column(String(128), nullable=True)
     iccid = Column(String(64), nullable=True)
     status = Column(
-        Enum(EsimStatus), default=EsimStatus.PENDING_ACTIVATION, nullable=False
+        Enum(
+            EsimStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=EsimStatus.PENDING_ACTIVATION,
+        nullable=False,
     )
     provider_reference = Column(String(128), nullable=True)
     provisioned_at = Column(DateTime, nullable=True)
@@ -194,4 +233,74 @@ class Payment(Base):
 
     order = relationship("Order", back_populates="payments")
 
-    order = relationship("Order", back_populates="payments")
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_number = Column(String(32), nullable=False, unique=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    currency = Column(String(8), nullable=False, default="USD")
+    amount_minor_units = Column(BigInteger, nullable=False, default=0)
+    tax_minor_units = Column(BigInteger, nullable=False, default=0)
+    status = Column(Enum(InvoiceStatus), default=InvoiceStatus.ISSUED, nullable=False)
+    issued_at = Column(DateTime, default=utcnow, nullable=False)
+    extra_metadata = Column("metadata", JSON, nullable=True)
+    pdf_url = Column(String(512), nullable=True)
+
+    order = relationship("Order", back_populates="invoice")
+    user = relationship("User", back_populates="invoices")
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=True, index=True)
+    status = Column(
+        Enum(SupportTicketStatus), default=SupportTicketStatus.OPEN, nullable=False
+    )
+    priority = Column(
+        Enum(SupportTicketPriority),
+        default=SupportTicketPriority.NORMAL,
+        nullable=False,
+    )
+    subject = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    internal_notes = Column(Text, nullable=True)
+    created_by = Column(String(255), nullable=True)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    due_at = Column(DateTime, nullable=True)
+    last_reminder_at = Column(DateTime, nullable=True)
+    reminder_count = Column(Integer, default=0, nullable=False)
+    escalation_level = Column(Integer, default=0, nullable=False)
+
+    user = relationship("User", back_populates="support_tickets")
+    order = relationship("Order", back_populates="support_tickets")
+    audit_entries = relationship(
+        "SupportTicketAudit",
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+        order_by="SupportTicketAudit.created_at",
+    )
+
+
+class SupportTicketAudit(Base):
+    __tablename__ = "support_ticket_audit"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("support_tickets.id"), nullable=False)
+    event_type = Column(Enum(SupportTicketEventType), nullable=False)
+    actor = Column(String(255), nullable=True)
+    from_status = Column(Enum(SupportTicketStatus), nullable=True)
+    to_status = Column(Enum(SupportTicketStatus), nullable=True)
+    notes = Column(Text, nullable=True)
+    extra_metadata = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    ticket = relationship("SupportTicket", back_populates="audit_entries")
