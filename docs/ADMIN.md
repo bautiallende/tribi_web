@@ -11,6 +11,9 @@ The admin panel provides a comprehensive interface for managing the core data of
 - **Payments**: Reconcile provider activity and investigate intent status
 - **eSIM Profiles**: Track provisioning status, assignments, and user linkage
 - **Inventory**: Inspect physical eSIM stock, low-stock alerts, and CSV imports
+- **Users CRM**: View customer context (orders, spend, notes, tickets) and edit internal notes
+- **Support Tickets**: Manage inbound issues linked to users/orders with lifecycle state changes
+- **Analytics**: Track funnel KPIs, time-series revenue, top plans, and short-term projections
 
 All admin pages include modern UX features:
 
@@ -134,6 +137,137 @@ Users must:
 - **Metadata View**: Shows provider reference, reservation/assignment timestamps, and updated audit trail
 - **Pagination**: 20 items per page; supports up to 200 via API parameter adjustment
 - **CSV Import**: Admins can upload inventory data to `/admin/inventory/import` for bulk creation/updates (documented below)
+
+### User CRM Overview (`/admin/users`)
+
+- **Context-rich table**: Columns include email, name, created date, total orders, ARPU (minor units), last order, open ticket count, and internal notes.
+- **Search & Sort**: Text search across email/name plus sorting by created date, last login, order totals, spend, or open tickets.
+- **Pagination**: Standard admin paging metadata with `page`, `page_size`, `total_pages`.
+- **Internal Notes**: Inline editor (frontend pending) powered by `PATCH /admin/users/{id}/notes` to capture qualitative context per customer.
+
+### Support Tickets (`/admin/support/tickets`)
+
+- **Lifecycle tracking**: States `open`, `in_progress`, `resolved`, `archived` with audit fields for `created_by`/`updated_by` and automatic `resolved_at` timestamps.
+- **Filters**: Query parameters for status, priority, user ID, and order ID, plus pagination controls.
+- **Creation & Updates**: Admins can open tickets tied to a user/order, set priority, and update status/notes as the investigation progresses.
+- **User linkage**: Responses embed the associated user summary for quick pivot back to the CRM view.
+
+### Analytics Dashboard (`/admin/analytics`)
+
+- **Range controls**: Date pickers plus quick presets (7/30/90 days) and event filter chips for signups, checkouts, payments, and activations.
+- **Funnel KPIs**: Cards summarizing totals, conversion rates, and revenue/AOV for the selected window.
+- **Timeseries**: Revenue bar chart with a daily breakdown table sourced from `GET /admin/analytics/timeseries`.
+- **Top plans**: Revenue leaderboard per plan using `GET /admin/analytics/overview`.
+- **Projections**: Moving-average forecast fed by `GET /admin/analytics/projections` with tunable window/horizon selects.
+- **Permissions**: Same admin guard as other modules—non-admin access responds with HTTP 403.
+
+### Billing Exports (`/admin/exports/sales`)
+
+- **Endpoint**: `GET /admin/exports/sales?period=daily|monthly|custom&start_date=...&end_date=...`
+- **Access**: Admin-only. Non-admin requests receive `403`.
+- **Output**: CSV with invoice number, order references, user email, amounts, currency, taxes, issued timestamp.
+- **Filename**: `SALES_EXPORT_FILENAME` env var controls base name (defaults to `tribi-sales`).
+- **Usage**: Trigger daily or monthly downloads for accounting; custom range requires both `start_date` and `end_date` ISO strings.
+
+### Users CRM Endpoints
+
+#### List Users
+
+```http
+GET /admin/users?q=ana@email.com&sort_by=total_orders&sort_order=desc&page=1&page_size=20
+```
+
+**Query Parameters**
+
+- `q` (optional): Case-insensitive search across email + name.
+- `sort_by` (optional): `created_at`, `last_login`, `total_orders`, `total_spent`, `last_order_at`, `open_tickets`.
+- `sort_order` (optional): `asc` or `desc` (default `desc`).
+- `page`, `page_size`: Standard pagination knobs (max 100).
+
+**Response**
+
+```json
+{
+  "items": [
+    {
+      "id": 42,
+      "email": "ana@email.com",
+      "name": "Ana S.",
+      "created_at": "2025-11-20T12:00:00Z",
+      "last_login": "2025-11-21T15:14:00Z",
+      "total_orders": 3,
+      "total_spent_minor_units": 18900,
+      "last_order_at": "2025-11-18T09:00:00Z",
+      "internal_notes": "Prefers WhatsApp",
+      "open_tickets": 1
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 1
+}
+```
+
+#### Update User Notes
+
+```http
+PATCH /admin/users/{user_id}/notes
+Content-Type: application/json
+
+{
+  "internal_notes": "Requested invoice in ARS"
+}
+```
+
+Returns the updated `AdminUserDetail` payload.
+
+### Support Ticket Endpoints
+
+#### List Support Tickets
+
+```http
+GET /admin/support/tickets?status_filter=open&priority=high&user_id=42&page=1&page_size=20
+```
+
+**Query Parameters**
+
+- `status_filter` (optional): `open`, `in_progress`, `resolved`, `archived`.
+- `priority` (optional): `low`, `normal`, `high`.
+- `user_id`, `order_id` (optional): Exact matches to scope tickets.
+- Standard pagination via `page` + `page_size`.
+
+#### Create Support Ticket
+
+```http
+POST /admin/support/tickets
+Content-Type: application/json
+
+{
+  "user_id": 42,
+  "order_id": 1200,
+  "subject": "Device cannot detect eSIM",
+  "description": "Customer stuck on QR scan",
+  "priority": "high"
+}
+```
+
+Returns a `SupportTicketRead` object with `status` defaulting to `open` and audit metadata populated with the acting admin email.
+
+#### Update Support Ticket
+
+```http
+PATCH /admin/support/tickets/{ticket_id}
+Content-Type: application/json
+
+{
+  "status": "resolved",
+  "internal_notes": "Reset profile; customer confirmed",
+  "priority": "normal"
+}
+```
+
+Updates lifecycle fields, recalculates `resolved_at` when moving into/out of `resolved`, and echoes the refreshed ticket payload.
 
 ## API Endpoints
 

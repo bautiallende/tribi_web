@@ -22,8 +22,9 @@ npm run start
 ```
 
 Then:
+
 - Press `i` to open iOS Simulator
-- Press `a` to open Android Emulator  
+- Press `a` to open Android Emulator
 - Scan QR code with Expo Go app on your phone
 
 ## 🏗️ Project Structure
@@ -48,12 +49,15 @@ apps/mobile/
 ## 📱 Features
 
 ### Authentication Flow
+
 - **Email OTP Login**: Passwordless authentication
 - **Secure Token Storage**: JWT tokens stored in Expo SecureStore
 - **Auto-navigation**: Redirects based on authentication state
 
 ### Main App (Bottom Tabs)
+
 1. **Browse Tab** 🌐
+
    - Search and select countries
    - View available eSIM plans
    - Create orders
@@ -65,6 +69,7 @@ apps/mobile/
    - Logout
 
 ### Checkout Flow
+
 - **Order Review**: Plan details, pricing
 - **MOCK Payment**: Test payment provider
 - **eSIM Activation**: Automatic activation with code
@@ -88,11 +93,14 @@ Create a `.env` file (use `.env.example` as template):
 
 ```bash
 EXPO_PUBLIC_API_BASE=http://localhost:8000
+EXPO_PUBLIC_ENABLE_REMOTE_UPDATES=false
 ```
 
 For production:
+
 ```bash
 EXPO_PUBLIC_API_BASE=https://api.tribi.app
+EXPO_PUBLIC_ENABLE_REMOTE_UPDATES=true
 ```
 
 ### Backend API
@@ -105,6 +113,7 @@ uvicorn app.main:app --reload
 ```
 
 API Endpoints used:
+
 - `POST /api/auth/request-code` - Request OTP
 - `POST /api/auth/verify` - Verify OTP code
 - `GET /api/countries` - List countries
@@ -125,12 +134,14 @@ API Endpoints used:
 ## 🧪 Testing Locally
 
 ### Test Authentication
+
 1. Enter any email (e.g., `test@example.com`)
 2. Check backend logs for OTP code
 3. Enter the 6-digit code
 4. JWT token is saved to SecureStore
 
 ### Test Order Flow
+
 1. Browse countries → Select country
 2. View plans → Select plan
 3. Checkout → Confirm payment (MOCK)
@@ -160,6 +171,7 @@ eas build --platform ios
 ```
 
 Requirements:
+
 - Apple Developer account
 - Update `ios.bundleIdentifier` in `app.json`
 
@@ -174,6 +186,7 @@ eas build --platform android
 ```
 
 Requirements:
+
 - Update `android.package` in `app.json`
 - Configure signing keystore
 
@@ -187,6 +200,7 @@ Requirements:
 ## 🐛 Troubleshooting
 
 ### "Cannot find module" errors
+
 ```bash
 cd apps/mobile
 rm -rf node_modules
@@ -194,15 +208,23 @@ npm install
 ```
 
 ### Metro bundler cache issues
+
 ```bash
 expo start --clear
 ```
 
+### "Failed to download remote update"
+
+- OTA updates are disabled locally by default (`EXPO_PUBLIC_ENABLE_REMOTE_UPDATES=false`) to prevent Expo Go from waiting on remote bundles.
+- If you intentionally publish OTA builds, set the flag to `true` and ensure the device has network access to Expo's update servers.
+
 ### SecureStore not working
+
 - SecureStore requires physical device or simulator (not Expo Go web)
 - Check expo-secure-store is installed
 
 ### API connection fails
+
 - Verify `EXPO_PUBLIC_API_BASE` is set correctly
 - Use `http://10.0.2.2:8000` for Android emulator (localhost)
 - Use your computer's IP for physical devices: `http://192.168.x.x:8000`

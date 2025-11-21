@@ -1,6 +1,6 @@
+import datetime as dt
 import random
 import smtplib
-import datetime as dt
 from datetime import timedelta
 from email.message import EmailMessage
 from typing import cast
@@ -24,6 +24,7 @@ from ..core.config import settings
 from ..db.session import get_db
 from ..models import AuthCode, User
 from ..schemas.auth import RequestCode, TokenResponse, UserRead, VerifyCode
+from ..services import AnalyticsEventType, record_event
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -109,6 +110,24 @@ def check_rate_limit(email: str, ip_address: str, db: Session) -> None:
             detail=f"Maximum {settings.RATE_LIMIT_CODES_PER_DAY} codes per {settings.RATE_LIMIT_WINDOW_HOURS}h exceeded",
         )
 
+    # Check IP-level quota window
+    if ip_address and ip_address != "unknown":
+        ip_codes_today = (
+            db.query(func.count(AuthCode.id))
+            .filter(
+                AuthCode.ip_address == ip_address,
+                AuthCode.created_at >= one_day_ago,
+            )
+            .scalar()
+        )
+        if ip_codes_today >= settings.RATE_LIMIT_CODES_PER_IP_PER_DAY:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    "Too many codes requested from this IP; try again later or contact support"
+                ),
+            )
+
 
 @router.post("/request-code")
 def request_code(
@@ -130,6 +149,12 @@ def request_code(
         user = User(email=email)
         db.add(user)
         db.flush()
+        record_event(
+            db,
+            event_type=AnalyticsEventType.USER_SIGNUP,
+            user_id=cast(int, user.id),
+            metadata={"source": "otp_request"},
+        )
 
     # Generate 6-digit code
     code = f"{random.randint(0, 999999):06d}"
@@ -204,12 +229,17 @@ def verify_code(payload: VerifyCode, response: Response, db: Session = Depends(g
     }
     token = jwt.encode(payload_jwt, settings.JWT_SECRET, algorithm="HS256")
 
+    secure_flag = settings.cookie_secure_flag
+    samesite_value = settings.cookie_samesite_value
+    if samesite_value == "none" and not secure_flag:
+        secure_flag = True
+
     print(f"  🔑 JWT created: {token[:20]}...")
     print("  🍪 Setting cookie:")
     print("     key: tribi_token")
     print("     httponly: True")
-    print("     secure: False")
-    print("     samesite: lax")
+    print(f"     secure: {secure_flag}")
+    print(f"     samesite: {samesite_value}")
     print(f"     max_age: {settings.JWT_EXPIRES_MIN * 60} seconds")
     print(f"     domain: {settings.COOKIE_DOMAIN}")
 
@@ -218,8 +248,8 @@ def verify_code(payload: VerifyCode, response: Response, db: Session = Depends(g
         key="tribi_token",
         value=token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=secure_flag,
+        samesite=samesite_value,
         max_age=settings.JWT_EXPIRES_MIN * 60,
         domain=settings.COOKIE_DOMAIN,
     )
@@ -235,11 +265,16 @@ def verify_code(payload: VerifyCode, response: Response, db: Session = Depends(g
 @router.post("/logout")
 def logout(response: Response):
     """Logout by clearing the auth cookie."""
+    secure_flag = settings.cookie_secure_flag
+    samesite_value = settings.cookie_samesite_value
+    if samesite_value == "none" and not secure_flag:
+        secure_flag = True
+
     response.delete_cookie(
         key="tribi_token",
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=secure_flag,
+        samesite=samesite_value,
         domain=settings.COOKIE_DOMAIN,
     )
     return {"message": "logged_out"}
@@ -256,9 +291,7 @@ def get_current_user(
     # Debug logging
     print("\n🔐 get_current_user called:")
     print(f"  Cookie (tribi_token): {'✅ Present' if tribi_token else '❌ Missing'}")
-    print(
-        f"  Header (Authorization): {'✅ Present' if authorization else '❌ Missing'}"
-    )
+    print(f"  Header (Authorization): {'✅ Present' if authorization else '❌ Missing'}")
 
     # Try cookie first (web), then header (mobile)
     if tribi_token:

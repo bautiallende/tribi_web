@@ -21,6 +21,8 @@ export default function AdminLayout({
     { href: "/admin/payments", label: "Payments" },
     { href: "/admin/esims", label: "eSIMs" },
     { href: "/admin/inventory", label: "Inventory" },
+    { href: "/admin/users", label: "Users" },
+    { href: "/admin/support", label: "Support" },
   ];
 
   useEffect(() => {

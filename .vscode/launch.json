@@ -129,10 +129,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
-        "start"
+        "start",
+        "--",
+        "--tunnel"
       ],
       "cwd": "${workspaceFolder}/apps/mobile",
-      "envFile": "${workspaceFolder}/.env",
+      "envFile": "${workspaceFolder}/apps/mobile/.env",
       "console": "integratedTerminal",
       "skipFiles": [
         "<node_internals>/**"
@@ -163,4 +165,3 @@
     }
   ]
 }
-

@@ -13,6 +13,13 @@ This repository contains the source code for Tribi, a service for selling eSIMs 
 - **CI/CD:** GitHub Actions (Python 3.10/3.11, Node 18/20)
 - **Code Quality:** Pre-commit hooks (black, ruff, eslint, prettier)
 
+## Phase 6 Highlights (Nov 2025)
+
+- **Security defaults:** Cookie flags derive from `ENVIRONMENT`/`COOKIE_*`, OTPs enforce per-IP quotas, and webhook secrets are mandatory. See `docs/SECURITY_ROTATION.md` + `BACKEND_HARDENING_COMPLETE.md`.
+- **Observability:** Structured logs with request IDs, optional Sentry integration, and `/health` + `/health/full` endpoints documented in `docs/OBSERVABILITY.md`.
+- **CI/CD:** `.github/workflows/ci.yml` now gates backend lint/tests, web lint/typecheck/build, and mobile TypeScript checks; release flow captured in `docs/CI_CD.md`.
+- **Status tracking:** Up-to-date progress lives in `SPRINT_STATUS.md` and `docs/ROADMAP_AUTOMATION.md`.
+
 ## Quick Start
 
 ### Prerequisites
@@ -92,6 +99,14 @@ make mobile        # Mobile app with Expo
 | `make build`      | Build all apps                            |
 | `make infra-up`   | Start Docker services                     |
 | `make infra-down` | Stop Docker services                      |
+
+## Security & Operations
+
+- Follow `docs/SECURITY_ROTATION.md` for rotating JWT, cookie, Stripe, and eSIM provider secrets without downtime.
+- Review `BACKEND_HARDENING_COMPLETE.md` for current production checklists and mitigation plans.
+- Track infra/security/observability progress in `docs/ROADMAP_AUTOMATION.md` (Phase 6).
+- Configure logging, Sentry, and health probes via `docs/OBSERVABILITY.md`.
+- Understand CI gates and the manual release flow in `docs/CI_CD.md`.
 
 ## Per-App Commands
 

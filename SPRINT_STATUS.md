@@ -1,207 +1,84 @@
-# 📊 Sprint Status: Backend + MySQL ✅ | Web/Mobile 🚧
+# 📊 Sprint Status — Phase 6 (Infrastructure / Security / Observability)
 
-## Current State
+_Last updated: 2025-11-21_
 
-### Backend: ✅ 100% COMPLETE
+## Snapshot
 
-**Database & Models:**
-- ✅ MySQL `tribi_dev` schema created
-- ✅ All 8 tables created (users, auth_codes, orders, payments, esim_profiles, etc.)
-- ✅ Setup script: `python setup_mysql.py`
+- **Branch:** `develop`
+- **CI:** ✅ `.github/workflows/ci.yml` (backend, web, mobile) — runs on pushes/PRs to `main` & `develop` with concurrency guard.
+- **Focus:** Phase 6 hardening (security defaults, observability, CI/CD, documentation).
 
-**API Endpoints:**
-- ✅ `POST /auth/request-code` - OTP email request
-- ✅ `POST /auth/verify` - OTP verification + JWT issuance
-- ✅ `GET /auth/me` - User profile (JWT protected)
-- ✅ `POST /orders` - Create order (JWT protected)
-- ✅ `GET /orders/mine` - List user orders (JWT protected)
-- ✅ `POST /payments/create` - MOCK payment (JWT protected)
-- ✅ `POST /payments/webhook` - Payment webhook
-- ✅ `POST /esims/activate` - Activate eSIM stub (JWT protected)
+## Recent Highlights
 
-**Testing:**
-- ✅ 5 auth endpoint tests PASSING
-- ✅ 3 existing tests PASSING
-- ✅ **Total: 8/8 tests PASSING** ✅
+1. **Security defaults** — Cookies auto-align with environment (`Secure`/`SameSite`), per-IP OTP quotas throttle shared networks, and Stripe webhooks enforce signature validation. See `apps/backend/app/api/auth.py` + `docs/SECURITY_ROTATION.md`.
+2. **Observability** — Structured logging with request IDs, optional Sentry integration, and `/health` + `/health/full` endpoints documented in `docs/OBSERVABILITY.md`.
+3. **CI/CD** — GitHub Actions lint/test backend (Python 3.10/3.11), lint/typecheck/build the web app (Node 18/20), and typecheck the Expo mobile app. Manual release flow captured in `docs/CI_CD.md`.
 
-**Configuration:**
-- ✅ `.env` file with credentials (root:1234@localhost)
-- ✅ All env vars loaded from config.py
-- ✅ JWT, Email, Payment, Database settings configured
+## Backend Status — ✅ Feature Complete
 
-### Documentation:
-- ✅ `MYSQL_SETUP.md` - Complete MySQL guide
-- ✅ `QUICKSTART.md` - Daily dev workflow
+- Auth, catalog, orders, payments, admin, and background jobs are live.
+- Structured logging defined in `app/core/logging_utils.py`; each request receives an `X-Request-ID` echoed back.
+- Health probes:
+  - `GET /health` → `{ "status": "ok" }`
+  - `GET /health/full` → includes DB connectivity + scheduler state.
+- Key tests: `test_auth_cookies.py`, `test_auth_rate_limit.py`, `test_health.py` (run via `pytest apps/backend/tests`).
 
----
+## Web Status — ✅ Admin + Catalog Delivered
 
-## Next Steps: Web UI 🚧
+- Next.js App Router pages cover marketing, catalog, checkout, and `/admin` dashboards.
+- CI enforces `npm run lint`, `npm run typecheck`, and `npm run build` on Node 18/20.
+- Observability env vars bubble through `.env` + `next.config.js` for telemetry alignment.
 
-### Task 1: Create Web Pages
+## Mobile Status — 🚧 QA Ready
 
-**Pages to Create:**
-1. `/auth` - OTP Input Form
-   - Email input
-   - OTP 6-digit input field
-   - JWT token storage (httpOnly cookie)
-   - Redirect to /plans after login
+- Expo app includes catalog browsing, OTP login, checkout, and account views.
+- `npm run typecheck` ensures TS safety (wired into CI). Lint/tests to follow once scripts exist.
 
-2. `/checkout/[orderId]` - Payment Confirmation
-   - Show plan details
-   - Show price
-   - MOCK payment button
-   - Confirmation screen
+## CI/CD & Release Flow
 
-3. `/orders/[orderId]` - Order Details
-   - Order status (created/paid/failed)
-   - eSIM activation code (if paid)
-   - QR code or download option
+- Workflow file: `.github/workflows/ci.yml` (concurrency guard, pip/npm caches, multi-runtime matrix).
+- Release doc: `docs/CI_CD.md` covers verification, merge strategy, tagging, smoke tests, and post-deploy monitoring.
+- Next automation target: add deployment stages once hosting targets are finalized.
 
-4. `/account` - User Profile
-   - Show user email/name
-   - List all user's orders
-   - Show active eSIMs
+## Observability & Operations
 
-**Tech Stack:**
-- Next.js 14+ (existing)
-- TailwindCSS (existing)
-- TypeScript
-- API client: fetch or axios
+- Configure via env vars: `LOG_LEVEL`, `LOG_FORMAT`, `ENABLE_REQUEST_LOGS`, `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_PROFILES_SAMPLE_RATE`.
+- `docs/OBSERVABILITY.md` details alerting playbooks (logs, Sentry, `/health` monitors).
+- `/health/full` output is ready for uptime monitors—surface alerts if status != `ok` or DB fails.
 
-**Flow:**
-```
-/plans/[iso2]
-    ↓ [Select Plan]
-/checkout/[orderId] (POST /orders)
-    ↓ [Pay MOCK]
-/orders/[orderId] (GET /orders/mine)
-    ↓ [Activate eSIM]
-/account (GET /auth/me)
-```
+## Outstanding Work
 
-### Task 2: API Integration Utilities
+- [ ] Finalize doc refresh (roll Phase 6 changes into README, tutorials, and roadmap summary).
+- [ ] Define Phase 7 scope (deployment automation + advanced analytics).
 
-Create `apps/web/utils/api.ts`:
-- Fetch JWT from cookie
-- Axios/fetch wrapper with auth headers
-- Error handling
-- Types for responses
-
-Create `apps/web/utils/esimSupport.ts`:
-- Detect device support (iPhone XS+, Android 5+)
-- Show warnings/compatibility notices
-
-### Task 3: Mobile Screens
-
-**Screens:**
-- OTP Input (similar to web)
-- Plan Selection + Purchase
-- Order Status
-- Account / eSIM Management
-
-**Tech:**
-- React Native / Expo
-- SecureStore for JWT
-- Same backend API
-
----
-
-## How to Use MySQL Setup
-
-### One-time Setup
+## Quick Commands
 
 ```powershell
+# Backend dev server
 cd apps/backend
-python setup_mysql.py
-```
+uvicorn app.main:app --reload
 
-### Daily Development
+# Backend tests + lint
+pytest tests -v --tb=short
+ruff check .
 
-```powershell
-# Terminal 1: Start Backend
-cd apps/backend
-python -m uvicorn app.main:app --reload
-# http://localhost:8000/docs
-
-# Terminal 2: Start Web
+# Web dev server
 cd apps/web
 npm run dev
-# http://localhost:3000
 
-# Terminal 3: Run Tests
-cd apps/backend
-python -m pytest tests/ -v -w  # -w to avoid warnings
+# Mobile typecheck
+cd apps/mobile
+npm run typecheck
+
+# Run full CI steps locally (pre-PR)
+
+npm install
 ```
 
-### Check Database
+## Verification Checklist
 
-```powershell
-mysql -h localhost -u root -p1234 -D tribi_dev
-
-# View tables
-SHOW TABLES;
-
-# Check users
-SELECT * FROM users;
-```
-
----
-
-## Env Configuration
-
-File: `apps/backend/.env`
-
-```env
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=1234
-MYSQL_DB=tribi_dev
-JWT_SECRET=dev-secret-key-change-in-prod
-PAYMENT_PROVIDER=MOCK
-```
-
----
-
-## Success Criteria for Web Pages
-
-- [ ] /auth page works (OTP request → verify → JWT)
-- [ ] /checkout creates order via API
-- [ ] /orders shows order status + activation code
-- [ ] /account shows user profile + orders
-- [ ] JWT persisted in httpOnly cookie
-- [ ] CORS working (localhost:3000 ↔ :8000)
-- [ ] All pages responsive
-
----
-
-## Git Status
-
-- Latest commit: "feat: setup MySQL local development environment"
-- Branch: main
-- Tests: ✅ 8/8 passing
-
----
-
-## Commands Reference
-
-```powershell
-# Setup MySQL (one-time)
-python setup_mysql.py
-
-# Run backend
-python -m uvicorn app.main:app --reload
-
-# Run tests
-python -m pytest tests/ -v
-
-# Run web
-npm run dev
-
-# Database CLI
-mysql -h localhost -u root -p1234 -D tribi_dev
-```
-
----
-
-**Next Action:** Start with creating `/auth` page component → integrate with POST /auth/request-code endpoint
+- [x] OTP login issues secure cookies + enforces per-IP quota.
+- [x] `/health` + `/health/full` return `status=ok` locally.
+- [x] CI green on latest `develop` push.
+- [ ] Docs updated to include Phase 6 changelog + operator instructions.
+      Create `apps/web/utils/api.ts`:

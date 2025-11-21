@@ -1,7 +1,7 @@
 import csv
 import io
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
@@ -11,15 +11,19 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
+from ..core.config import settings
 from ..db.session import get_db
 from ..models import (
     Carrier,
     Country,
     EsimInventory,
     EsimProfile,
+    Invoice,
     Order,
     Payment,
     Plan,
+    SupportTicket,
+    SupportTicketAudit,
     User,
 )
 from ..models.auth_models import (
@@ -27,6 +31,9 @@ from ..models.auth_models import (
     EsimStatus,
     OrderStatus,
     PaymentStatus,
+    SupportTicketEventType,
+    SupportTicketPriority,
+    SupportTicketStatus,
 )
 from ..schemas.admin import (
     AdminEsimProfileRead,
@@ -35,7 +42,11 @@ from ..schemas.admin import (
     AdminOrderRead,
     AdminPaymentRead,
     AdminStockAlert,
+    AdminUserDetail,
     AdminUserSummary,
+    AnalyticsOverviewResponse,
+    AnalyticsProjectionResponse,
+    AnalyticsTimeseriesResponse,
     CarrierCreate,
     CarrierUpdate,
     CountryCreate,
@@ -43,11 +54,25 @@ from ..schemas.admin import (
     PaginatedResponse,
     PlanCreate,
     PlanUpdate,
+    SupportTicketAuditRead,
+    SupportTicketCreate,
+    SupportTicketRead,
+    SupportTicketUpdate,
+    UserNotesUpdate,
 )
 from ..schemas.catalog import CarrierRead, CountryRead, PlanRead
+from ..services import (
+    AnalyticsEventType,
+    get_overview_metrics,
+    get_projections,
+    get_timeseries,
+)
+from ..services.billing import build_sales_export_csv
+from ..services.support import get_support_automation_service
 from .auth import get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+support_automation = get_support_automation_service()
 
 
 # ========================================
@@ -1170,6 +1195,681 @@ async def import_inventory_csv(
 
 
 # ========================================
+# CRM / Users & Support
+# ========================================
+
+
+def _user_metrics_query(db: Session):
+    orders_stats = (
+        db.query(
+            Order.user_id.label("user_id"),
+            func.count(Order.id).label("total_orders"),
+            func.coalesce(func.sum(Order.amount_minor_units), 0).label("total_spent"),
+            func.max(Order.created_at).label("last_order_at"),
+        )
+        .group_by(Order.user_id)
+        .subquery()
+    )
+
+    open_statuses = [
+        SupportTicketStatus.OPEN,
+        SupportTicketStatus.IN_PROGRESS,
+    ]
+    tickets_stats = (
+        db.query(
+            SupportTicket.user_id.label("user_id"),
+            func.count(SupportTicket.id).label("open_tickets"),
+        )
+        .filter(SupportTicket.status.in_(open_statuses))
+        .group_by(SupportTicket.user_id)
+        .subquery()
+    )
+
+    total_orders_col = func.coalesce(orders_stats.c.total_orders, 0)
+    total_spent_col = func.coalesce(orders_stats.c.total_spent, 0)
+    last_order_col = orders_stats.c.last_order_at
+    open_tickets_col = func.coalesce(tickets_stats.c.open_tickets, 0)
+
+    query = (
+        db.query(
+            User,
+            total_orders_col.label("total_orders"),
+            total_spent_col.label("total_spent"),
+            last_order_col.label("last_order_at"),
+            open_tickets_col.label("open_tickets"),
+        )
+        .outerjoin(orders_stats, orders_stats.c.user_id == User.id)
+        .outerjoin(tickets_stats, tickets_stats.c.user_id == User.id)
+    )
+
+    sort_columns = {
+        "created_at": User.created_at,
+        "last_login": User.last_login,
+        "total_orders": total_orders_col,
+        "total_spent": total_spent_col,
+        "last_order_at": last_order_col,
+        "open_tickets": open_tickets_col,
+    }
+
+    return query, sort_columns
+
+
+def _serialize_user_detail_row(row) -> AdminUserDetail:
+    user: User = row[0]
+    total_orders = int(row.total_orders or 0)
+    total_spent = int(row.total_spent or 0)
+    last_order_at = row.last_order_at
+    open_tickets = int(row.open_tickets or 0)
+
+    return AdminUserDetail(
+        id=cast(int, user.id),
+        email=cast(str | None, user.email),
+        name=cast(str | None, user.name),
+        created_at=cast(datetime, user.created_at),
+        last_login=cast(datetime | None, user.last_login),
+        total_orders=total_orders,
+        total_spent_minor_units=total_spent,
+        last_order_at=cast(datetime | None, last_order_at),
+        internal_notes=cast(str | None, user.internal_notes),
+        open_tickets=open_tickets,
+    )
+
+
+def _get_user_detail(db: Session, user_id: int) -> AdminUserDetail | None:
+    query, _ = _user_metrics_query(db)
+    row = query.filter(User.id == user_id).first()
+    if not row:
+        return None
+    return _serialize_user_detail_row(row)
+
+
+def _support_ticket_query(db: Session):
+    return db.query(SupportTicket).options(
+        joinedload(SupportTicket.user),
+        joinedload(SupportTicket.audit_entries),
+    )
+
+
+@router.get("/users", response_model=PaginatedResponse[AdminUserDetail])
+def list_users(
+    q: str = Query("", description="Search by email or name"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sort_by: str = Query(
+        "created_at",
+        description=(
+            "Sort field: created_at, last_login, total_orders, total_spent, last_order_at, open_tickets"
+        ),
+    ),
+    sort_order: str = Query("desc", description="Sort order asc/desc"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    query, sort_columns = _user_metrics_query(db)
+
+    if q:
+        term = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(User.email).like(term),
+                func.lower(User.name).like(term),
+            )
+        )
+
+    total = query.count()
+    sort_column = sort_columns.get(sort_by, User.created_at)
+    if sort_order.lower() == "desc":
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column.asc())
+
+    offset = (page - 1) * page_size
+    rows = query.offset(offset).limit(page_size).all()
+    items = [_serialize_user_detail_row(row) for row in rows]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
+@router.patch("/users/{user_id}/notes", response_model=AdminUserDetail)
+def update_user_notes(
+    user_id: int,
+    payload: UserNotesUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    setattr(user, "internal_notes", payload.internal_notes)
+    db.commit()
+    db.refresh(user)
+
+    detail = _get_user_detail(db, user_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="User detail not available")
+    return detail
+
+
+def _serialize_support_ticket(ticket: SupportTicket) -> SupportTicketRead:
+    def _serialize_audit(entry: SupportTicketAudit) -> SupportTicketAuditRead:
+        event_value = (
+            entry.event_type.value
+            if hasattr(entry.event_type, "value")
+            else str(entry.event_type)
+        )
+        if entry.from_status is not None:
+            from_status = (
+                entry.from_status.value
+                if hasattr(entry.from_status, "value")
+                else str(entry.from_status)
+            )
+        else:
+            from_status = None
+
+        if entry.to_status is not None:
+            to_status = (
+                entry.to_status.value
+                if hasattr(entry.to_status, "value")
+                else str(entry.to_status)
+            )
+        else:
+            to_status = None
+
+        return SupportTicketAuditRead(
+            id=cast(int, entry.id),
+            event_type=event_value,
+            actor=cast(str | None, entry.actor),
+            from_status=from_status,
+            to_status=to_status,
+            notes=cast(str | None, entry.notes),
+            metadata=cast(dict[str, Any] | None, entry.extra_metadata),
+            created_at=cast(datetime, entry.created_at),
+        )
+
+    status_value = (
+        ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status)
+    )
+    priority_value = (
+        ticket.priority.value
+        if hasattr(ticket.priority, "value")
+        else str(ticket.priority)
+    )
+
+    user_summary = _serialize_admin_user(ticket.user)
+    if not user_summary:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Support ticket is missing user context",
+        )
+
+    return SupportTicketRead(
+        id=cast(int, ticket.id),
+        user=user_summary,
+        order_id=cast(int | None, ticket.order_id),
+        status=status_value,
+        priority=priority_value,
+        subject=cast(str, ticket.subject),
+        description=cast(str | None, ticket.description),
+        internal_notes=cast(str | None, ticket.internal_notes),
+        created_by=cast(str | None, ticket.created_by),
+        updated_by=cast(str | None, ticket.updated_by),
+        created_at=cast(datetime, ticket.created_at),
+        updated_at=cast(datetime, ticket.updated_at),
+        resolved_at=cast(datetime | None, ticket.resolved_at),
+        due_at=cast(datetime | None, ticket.due_at),
+        last_reminder_at=cast(datetime | None, ticket.last_reminder_at),
+        reminder_count=cast(
+            int,
+            ticket.reminder_count if ticket.reminder_count is not None else 0,
+        ),
+        escalation_level=cast(
+            int,
+            ticket.escalation_level if ticket.escalation_level is not None else 0,
+        ),
+        audits=[_serialize_audit(entry) for entry in ticket.audit_entries],
+    )
+
+
+@router.get("/support/tickets", response_model=PaginatedResponse[SupportTicketRead])
+def list_support_tickets(
+    status_filter: str | None = Query(None, description="Filter by status"),
+    priority: str | None = Query(None, description="Filter by priority"),
+    user_id: int | None = Query(None, gt=0),
+    order_id: int | None = Query(None, gt=0),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    query = _support_ticket_query(db).order_by(SupportTicket.created_at.desc())
+
+    if status_filter:
+        status_enum = _parse_enum(
+            SupportTicketStatus, status_filter, "support ticket status"
+        )
+        query = query.filter(SupportTicket.status == status_enum)
+
+    if priority:
+        priority_enum = _parse_enum(
+            SupportTicketPriority, priority, "support ticket priority"
+        )
+        query = query.filter(SupportTicket.priority == priority_enum)
+
+    if user_id:
+        query = query.filter(SupportTicket.user_id == user_id)
+
+    if order_id:
+        query = query.filter(SupportTicket.order_id == order_id)
+
+    total = query.count()
+    offset = (page - 1) * page_size
+    tickets = query.offset(offset).limit(page_size).all()
+
+    items = [_serialize_support_ticket(ticket) for ticket in tickets]
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
+@router.post(
+    "/support/tickets",
+    response_model=SupportTicketRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_support_ticket(
+    payload: SupportTicketCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if payload.order_id:
+        order = (
+            db.query(Order)
+            .filter(Order.id == payload.order_id, Order.user_id == user.id)
+            .first()
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found for user")
+
+    priority_enum = (
+        _parse_enum(SupportTicketPriority, payload.priority, "priority")
+        if payload.priority
+        else SupportTicketPriority.NORMAL
+    )
+
+    actor_email = cast(str | None, current_admin.email)
+
+    ticket = SupportTicket(
+        user_id=user.id,
+        order_id=payload.order_id,
+        subject=payload.subject,
+        description=payload.description,
+        internal_notes=payload.internal_notes,
+        priority=priority_enum,
+        status=SupportTicketStatus.OPEN,
+        created_by=actor_email,
+        updated_by=actor_email,
+    )
+
+    support_automation.ensure_due_at(ticket, due_override=payload.due_at)
+
+    db.add(ticket)
+    db.flush()
+
+    support_automation.record_audit(
+        db,
+        ticket,
+        event_type=SupportTicketEventType.CREATED,
+        actor=actor_email,
+        notes="Ticket created",
+        metadata={
+            "priority": priority_enum.value,
+            "due_at": ticket.due_at.isoformat() if ticket.due_at is not None else None,
+            "order_id": payload.order_id,
+        },
+        to_status=SupportTicketStatus.OPEN,
+    )
+
+    db.commit()
+
+    created = _support_ticket_query(db).filter(SupportTicket.id == ticket.id).first()
+    if not created:
+        raise HTTPException(status_code=404, detail="Ticket not found after creation")
+
+    return _serialize_support_ticket(created)
+
+
+@router.patch("/support/tickets/{ticket_id}", response_model=SupportTicketRead)
+def update_support_ticket(
+    ticket_id: int,
+    payload: SupportTicketUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    ticket = _support_ticket_query(db).filter(SupportTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    actor_email = cast(str | None, current_admin.email)
+    events: list[dict[str, Any]] = []
+
+    previous_status = ticket.status
+    previous_priority = ticket.priority
+    original_due = ticket.due_at
+    priority_changed = False
+
+    if payload.status:
+        status_enum = _parse_enum(
+            SupportTicketStatus, payload.status, "support ticket status"
+        )
+        if status_enum != ticket.status:
+            ticket.status = status_enum  # type: ignore[assignment]
+            if status_enum == SupportTicketStatus.RESOLVED:
+                setattr(ticket, "resolved_at", datetime.utcnow())
+            elif status_enum in (
+                SupportTicketStatus.OPEN,
+                SupportTicketStatus.IN_PROGRESS,
+            ):
+                setattr(ticket, "resolved_at", None)
+
+            events.append(
+                {
+                    "event_type": SupportTicketEventType.STATUS_CHANGED,
+                    "actor": actor_email,
+                    "from_status": previous_status,
+                    "to_status": status_enum,
+                    "metadata": {"source": "admin_api"},
+                }
+            )
+            previous_status = status_enum
+
+    if payload.priority:
+        priority_enum = _parse_enum(
+            SupportTicketPriority, payload.priority, "support ticket priority"
+        )
+        if priority_enum != ticket.priority:
+            ticket.priority = priority_enum  # type: ignore[assignment]
+            events.append(
+                {
+                    "event_type": SupportTicketEventType.PRIORITY_CHANGED,
+                    "actor": actor_email,
+                    "metadata": {
+                        "from": (
+                            previous_priority.value
+                            if hasattr(previous_priority, "value")
+                            else str(previous_priority)
+                        ),
+                        "to": priority_enum.value,
+                    },
+                }
+            )
+            previous_priority = priority_enum
+            priority_changed = True
+
+    if payload.description is not None:
+        setattr(ticket, "description", payload.description)
+
+    if payload.internal_notes is not None:
+        notes_before = ticket.internal_notes or ""
+        setattr(ticket, "internal_notes", payload.internal_notes)
+        notes_after = payload.internal_notes or ""
+        if notes_after != notes_before:
+            events.append(
+                {
+                    "event_type": SupportTicketEventType.NOTE_ADDED,
+                    "actor": actor_email,
+                    "notes": "Internal notes updated",
+                }
+            )
+
+    due_override = payload.due_at
+    sla_reason = None
+    if due_override is not None:
+        sla_reason = "manual_override"
+    elif priority_changed:
+        sla_reason = "priority_changed"
+
+    if due_override is not None or priority_changed:
+        before_due = ticket.due_at
+        new_due = support_automation.ensure_due_at(ticket, due_override=due_override)
+        if new_due != before_due:
+            events.append(
+                {
+                    "event_type": SupportTicketEventType.SLA_UPDATED,
+                    "actor": actor_email,
+                    "notes": "Ticket due date updated",
+                    "metadata": {
+                        "previous_due_at": (
+                            before_due.isoformat() if before_due is not None else None
+                        ),
+                        "due_at": new_due.isoformat(),
+                        "reason": sla_reason,
+                    },
+                }
+            )
+
+    sla_event_recorded = any(
+        event.get("event_type") == SupportTicketEventType.SLA_UPDATED
+        for event in events
+    )
+
+    if original_due is None and not sla_event_recorded:
+        new_due = support_automation.ensure_due_at(ticket)
+        events.append(
+            {
+                "event_type": SupportTicketEventType.SLA_UPDATED,
+                "actor": actor_email,
+                "notes": "Ticket due date initialized",
+                "metadata": {
+                    "previous_due_at": None,
+                    "due_at": new_due.isoformat(),
+                    "reason": "backfill",
+                },
+            }
+        )
+
+    setattr(ticket, "updated_by", actor_email)
+    setattr(ticket, "updated_at", datetime.utcnow())
+
+    for event_payload in events:
+        support_automation.record_audit(db, ticket, **event_payload)
+
+    db.commit()
+
+    updated = _support_ticket_query(db).filter(SupportTicket.id == ticket.id).first()
+    if not updated:
+        raise HTTPException(status_code=404, detail="Ticket not found after update")
+
+    return _serialize_support_ticket(updated)
+
+
+# ========================================
+# Billing & Exports
+# ========================================
+
+
+def _resolve_export_window(
+    period: str,
+    start_date: datetime | None,
+    end_date: datetime | None,
+) -> tuple[datetime, datetime]:
+    normalized = period.lower()
+    now = datetime.utcnow()
+
+    if normalized == "daily":
+        start = start_date or datetime(now.year, now.month, now.day)
+        end = end_date or (start + timedelta(days=1))
+    elif normalized == "monthly":
+        start = start_date or datetime(now.year, now.month, 1)
+        if end_date:
+            end = end_date
+        else:
+            if start.month == 12:
+                end = start.replace(year=start.year + 1, month=1, day=1)
+            else:
+                end = start.replace(month=start.month + 1, day=1)
+    elif normalized == "custom":
+        if not start_date or not end_date:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="start_date and end_date are required for custom exports",
+            )
+        start, end = start_date, end_date
+    else:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Invalid period. Use daily, monthly, or custom.",
+        )
+
+    if start >= end:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be before end_date",
+        )
+
+    return start, end
+
+
+def _resolve_analytics_range(
+    start_date: datetime | None,
+    end_date: datetime | None,
+) -> tuple[datetime, datetime]:
+    """Normalize analytics window with sane defaults."""
+
+    end = end_date or datetime.utcnow()
+    default_days = max(1, settings.ANALYTICS_DEFAULT_RANGE_DAYS)
+    start = start_date or (end - timedelta(days=default_days - 1))
+
+    start_floor = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_ceiling = end.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    if start_floor > end_ceiling:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be before end_date",
+        )
+
+    max_window_days = 365
+    if (end_ceiling - start_floor).days > max_window_days:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Analytics range too large (max 365 days)",
+        )
+
+    return start_floor, end_ceiling
+
+
+@router.get("/exports/sales")
+def export_sales_report(
+    period: str = Query(
+        "daily",
+        description="Interval to export (daily, monthly, custom)",
+    ),
+    start_date: datetime
+    | None = Query(None, description="ISO timestamp start (required for custom)"),
+    end_date: datetime
+    | None = Query(None, description="ISO timestamp end (required for custom)"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    start, end = _resolve_export_window(period, start_date, end_date)
+
+    invoices = (
+        db.query(Invoice)
+        .options(joinedload(Invoice.user))
+        .filter(Invoice.issued_at >= start, Invoice.issued_at < end)
+        .order_by(Invoice.issued_at.asc())
+        .all()
+    )
+
+    csv_buffer = build_sales_export_csv(invoices)
+    filename = (
+        f"{settings.SALES_EXPORT_FILENAME}-"
+        f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}.csv"
+    )
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+
+    return StreamingResponse(
+        iter([csv_buffer.getvalue()]),
+        media_type="text/csv",
+        headers=headers,
+    )
+
+
+# ========================================
+# Analytics & Insights
+# ========================================
+
+
+@router.get("/analytics/overview", response_model=AnalyticsOverviewResponse)
+def analytics_overview(
+    start_date: datetime
+    | None = Query(None, description="UTC start datetime (defaults to last N days)"),
+    end_date: datetime
+    | None = Query(None, description="UTC end datetime (defaults to now)"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    start, end = _resolve_analytics_range(start_date, end_date)
+    metrics = get_overview_metrics(db, start=start, end=end)
+    return AnalyticsOverviewResponse(**cast(dict[str, Any], metrics))
+
+
+@router.get("/analytics/timeseries", response_model=AnalyticsTimeseriesResponse)
+def analytics_timeseries(
+    start_date: datetime | None = Query(None, description="UTC range start"),
+    end_date: datetime | None = Query(None, description="UTC range end"),
+    event_types: list[str]
+    | None = Query(
+        None,
+        description="Optional event types to include (repeat param)",
+    ),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    start, end = _resolve_analytics_range(start_date, end_date)
+    filters = _parse_event_type_filters(event_types)
+    payload = get_timeseries(db, start=start, end=end, event_types=filters)
+    return AnalyticsTimeseriesResponse(**cast(dict[str, Any], payload))
+
+
+@router.get("/analytics/projections", response_model=AnalyticsProjectionResponse)
+def analytics_projections(
+    window_days: int = Query(
+        settings.ANALYTICS_PROJECTION_WINDOW_DAYS,
+        ge=3,
+        le=90,
+        description="Historical window size for moving average",
+    ),
+    horizon_days: int = Query(
+        settings.ANALYTICS_PROJECTION_HORIZON_DAYS,
+        ge=1,
+        le=30,
+        description="Forward-looking projection horizon",
+    ),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    payload = get_projections(db, window_days=window_days, horizon_days=horizon_days)
+    return AnalyticsProjectionResponse(**cast(dict[str, Any], payload))
+
+
+# ========================================
 # Helpers
 # ========================================
 
@@ -1183,6 +1883,30 @@ def _parse_enum(enum_cls, value: str, field_name: str):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f"Invalid {field_name}: {value}",
     )
+
+
+def _parse_event_type_filters(
+    event_types: list[str] | None,
+) -> list[AnalyticsEventType] | None:
+    if not event_types:
+        return None
+
+    resolved: list[AnalyticsEventType] = []
+    for raw in event_types:
+        normalized = raw.strip().lower()
+        matched = None
+        for event in AnalyticsEventType:
+            if event.value == normalized or event.name.lower() == normalized:
+                matched = event
+                break
+        if not matched:
+            valid = ", ".join(evt.value for evt in AnalyticsEventType)
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid event_type '{raw}'. Use one of: {valid}",
+            )
+        resolved.append(matched)
+    return resolved
 
 
 def _serialize_admin_user(user: User | None) -> AdminUserSummary | None:

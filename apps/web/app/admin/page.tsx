@@ -309,6 +309,98 @@ export default function AdminDashboard() {
             </svg>
           </div>
         </Link>
+
+        {/* Users CRM Card */}
+        <Link
+          href="/admin/users"
+          className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">Users CRM</h3>
+            <svg
+              className="h-8 w-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-600">
+            View customer history, revenue, and internal notes in one place.
+          </p>
+          <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+            Open CRM
+            <svg
+              className="ml-2 h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </Link>
+
+        {/* Support Tickets Card */}
+        <Link
+          href="/admin/support"
+          className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-gray-900">
+              Support Tickets
+            </h3>
+            <svg
+              className="h-8 w-8 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 8h2a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2h2"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 12v9m0 0l-3-3m3 3l3-3M7 8l5-5 5 5"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-600">
+            Track and resolve inbound support issues linked to orders.
+          </p>
+          <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+            View queue
+            <svg
+              className="ml-2 h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </Link>
       </div>
 
       {/* Quick Stats */}
@@ -337,6 +429,50 @@ export default function AdminDashboard() {
               All actions support search and pagination
             </li>
             <li className="flex items-center">
+              {/* Analytics Card */}
+              <Link
+                href="/admin/analytics"
+                className="group block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-500 hover:shadow-md"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Analytics
+                  </h3>
+                  <svg
+                    className="h-8 w-8 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 19h16M4 13h8m-8-6h12M8 21V3m4 18V9m4 12V5m4 16V7"
+                    />
+                  </svg>
+                </div>
+                <p className="text-gray-600">
+                  Track signups, conversions, plan revenue, and activation
+                  trends.
+                </p>
+                <div className="mt-4 flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
+                  View insights
+                  <svg
+                    className="ml-2 h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </div>
+              </Link>
               <svg
                 className="mr-2 h-5 w-5 text-green-500"
                 fill="none"

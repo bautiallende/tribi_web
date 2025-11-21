@@ -20,6 +20,8 @@ from ..models.auth_models import (
 from ..models.auth_models import (
     PaymentProvider as PaymentProviderEnum,
 )
+from ..services.analytics import AnalyticsEventType, record_event
+from ..services.billing import generate_invoice_for_order
 from ..services.esim_inventory import (
     create_inventory_from_provisioning,
     reserve_inventory_item,
@@ -77,12 +79,12 @@ def _apply_provisioning_to_esim(
     if inventory_item:
         inventory_item.activation_code = (
             inventory_item.activation_code or activation_code
-        )
-        inventory_item.iccid = inventory_item.iccid or iccid
-        inventory_item.qr_payload = inventory_item.qr_payload or qr_payload
-        inventory_item.instructions = inventory_item.instructions or instructions
-        inventory_item.status = EsimInventoryStatus.ASSIGNED
-        inventory_item.assigned_at = inventory_item.assigned_at or datetime.utcnow()
+        )  # type: ignore[assignment]
+        inventory_item.iccid = inventory_item.iccid or iccid  # type: ignore[assignment]
+        inventory_item.qr_payload = inventory_item.qr_payload or qr_payload  # type: ignore[assignment]
+        inventory_item.instructions = inventory_item.instructions or instructions  # type: ignore[assignment]
+        inventory_item.status = EsimInventoryStatus.ASSIGNED  # type: ignore[assignment]
+        inventory_item.assigned_at = inventory_item.assigned_at or datetime.utcnow()  # type: ignore[assignment]
         esim.inventory_item = inventory_item  # type: ignore[assignment]
         esim.inventory_item_id = inventory_item.id  # type: ignore[assignment]
 
@@ -277,6 +279,52 @@ def _update_order_status_from_payment(
         order.status = OrderStatus.FAILED  # type: ignore[assignment]
 
 
+def _maybe_issue_invoice(
+    db: Session,
+    *,
+    order: Order | None,
+    payment_status: PaymentStatus,
+    payment: Payment | None,
+) -> None:
+    if not order or payment_status != PaymentStatus.SUCCEEDED:
+        return
+
+    try:
+        generate_invoice_for_order(db, order=order, payment=payment)
+    except Exception as exc:  # pragma: no cover - log + continue
+        logger.error("Failed to generate invoice for order %s: %s", order.id, exc)
+
+
+def _record_payment_success_event(
+    db: Session,
+    *,
+    order: Order | None,
+    payment: Payment,
+) -> None:
+    if not order:
+        return
+
+    amount_minor_units = int(order.amount_minor_units or 0)
+    record_event(
+        db,
+        event_type=AnalyticsEventType.PAYMENT_SUCCEEDED,
+        user_id=cast(int, order.user_id),
+        order_id=cast(int, order.id),
+        plan_id=order.plan_id,
+        amount_minor_units=amount_minor_units,
+        currency=str(order.currency or settings.DEFAULT_CURRENCY),
+        metadata={
+            "payment_id": payment.id,
+            "provider": (
+                payment.provider.value
+                if isinstance(payment.provider, PaymentProviderEnum)
+                else str(payment.provider)
+            ),
+            "intent_id": payment.intent_id,
+        },
+    )
+
+
 @router.post("", response_model=OrderRead)
 def create_order(
     payload: OrderCreateRequest,
@@ -314,7 +362,7 @@ def create_order(
 
     # Atomic transaction: create Order + pre-register EsimProfile
     order = Order(
-        user_id=current_user.id,
+        user_id=cast(int, current_user.id),
         plan_id=plan_id,
         status=OrderStatus.CREATED,
         currency=currency,
@@ -335,6 +383,19 @@ def create_order(
         carrier_id=plan.carrier_id,
     )
     db.add(esim)
+    record_event(
+        db,
+        event_type=AnalyticsEventType.CHECKOUT_STARTED,
+        user_id=current_user.id,
+        order_id=cast(int, order.id),
+        plan_id=plan_id,
+        amount_minor_units=amount_minor_units,
+        currency=currency,
+        metadata={
+            "plan_snapshot": plan_snapshot,
+            "idempotency_key": normalized_key,
+        },
+    )
     db.commit()
     db.refresh(order)
 
@@ -414,6 +475,11 @@ def create_payment(
     )
     db.add(payment)
     _update_order_status_from_payment(order, payment_status)
+    _maybe_issue_invoice(
+        db, order=order, payment_status=payment_status, payment=payment
+    )
+    if payment_status == PaymentStatus.SUCCEEDED:
+        _record_payment_success_event(db, order=order, payment=payment)
     db.commit()
 
     response_payload = {
@@ -463,6 +529,11 @@ async def payment_webhook(
         raise HTTPException(status_code=404, detail="Payment not found")
 
     # Update payment status
+    previous_status = (
+        payment.status
+        if isinstance(payment.status, PaymentStatus)
+        else PaymentStatus(payment.status)
+    )
     payment_status = _map_payment_status(intent.status)
     setattr(payment, "status", payment_status)
     setattr(payment, "raw_payload", payload)
@@ -470,6 +541,14 @@ async def payment_webhook(
     # Update order status based on payment
     order = db.query(Order).filter(Order.id == payment.order_id).first()
     _update_order_status_from_payment(order, payment_status)
+    _maybe_issue_invoice(
+        db, order=order, payment_status=payment_status, payment=payment
+    )
+    if (
+        payment_status == PaymentStatus.SUCCEEDED
+        and previous_status != PaymentStatus.SUCCEEDED
+    ):
+        _record_payment_success_event(db, order=order, payment=payment)
 
     db.commit()
 
@@ -562,6 +641,19 @@ def activate_esim(
         esim=esim,
         provisioning_result=provisioning_result,
         inventory_item=inventory_item,
+    )
+    record_event(
+        db,
+        event_type=AnalyticsEventType.ESIM_ACTIVATED,
+        user_id=cast(int, current_user.id),
+        order_id=cast(int, order.id),
+        plan_id=plan_id,
+        metadata={
+            "inventory_item_id": getattr(inventory_item, "id", None),
+            "country_id": country_id,
+            "carrier_id": carrier_id,
+            "provider_reference": provisioning_result.provider_reference,
+        },
     )
 
     db.commit()

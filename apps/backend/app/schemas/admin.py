@@ -90,6 +90,20 @@ class AdminUserSummary(BaseModel):
     name: str | None = None
 
 
+class AdminUserDetail(AdminUserSummary):
+    created_at: datetime
+    last_login: datetime | None = None
+    total_orders: int = 0
+    total_spent_minor_units: int = 0
+    last_order_at: datetime | None = None
+    internal_notes: str | None = None
+    open_tickets: int = 0
+
+
+class UserNotesUpdate(BaseModel):
+    internal_notes: str | None = None
+
+
 class AdminPaymentRead(BaseModel):
     id: int
     order_id: int
@@ -156,3 +170,102 @@ class AdminInventoryStats(BaseModel):
     totals: dict[str, int]
     low_stock_threshold: int
     low_stock_alerts: list[AdminStockAlert]
+
+
+class SupportTicketAuditRead(BaseModel):
+    id: int
+    event_type: str
+    actor: str | None = None
+    from_status: str | None = None
+    to_status: str | None = None
+    notes: str | None = None
+    metadata: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class SupportTicketRead(BaseModel):
+    id: int
+    user: AdminUserSummary
+    order_id: int | None = None
+    status: str
+    priority: str
+    subject: str
+    description: str | None = None
+    internal_notes: str | None = None
+    created_by: str | None = None
+    updated_by: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None = None
+    due_at: datetime | None = None
+    last_reminder_at: datetime | None = None
+    reminder_count: int = 0
+    escalation_level: int = 0
+    audits: list[SupportTicketAuditRead] = Field(default_factory=list)
+
+
+class SupportTicketCreate(BaseModel):
+    user_id: int
+    order_id: int | None = None
+    subject: str
+    description: str | None = None
+    priority: str | None = None
+    internal_notes: str | None = None
+    due_at: datetime | None = None
+
+
+class SupportTicketUpdate(BaseModel):
+    status: str | None = None
+    priority: str | None = None
+    description: str | None = None
+    internal_notes: str | None = None
+    due_at: datetime | None = None
+
+
+# ========================================
+# Analytics Schemas
+# ========================================
+
+
+class AnalyticsTopPlan(BaseModel):
+    plan_id: int | None = None
+    name: str | None = None
+    payments: int
+    revenue_minor_units: int
+    data_gb: float | None = None
+    duration_days: int | None = None
+
+
+class AnalyticsOverviewResponse(BaseModel):
+    total_signups: int
+    checkout_started: int
+    payments: int
+    activations: int
+    revenue_minor_units: int
+    conversion_rate: float
+    signup_to_payment: float
+    activation_rate: float
+    average_order_value_minor_units: int
+    top_plans: list[AnalyticsTopPlan]
+
+
+class AnalyticsTimeseriesPoint(BaseModel):
+    date: str
+    user_signup: int
+    checkout_started: int
+    payment_succeeded: int
+    esim_activated: int
+    revenue_minor_units: int
+
+
+class AnalyticsTimeseriesResponse(BaseModel):
+    points: list[AnalyticsTimeseriesPoint]
+
+
+class AnalyticsProjectionResponse(BaseModel):
+    revenue_next_days_minor_units: int
+    signups_next_days: int
+    avg_daily_revenue_minor_units: int
+    avg_daily_signups: float
+    growth_rate: float
+    notes: str | None = None
